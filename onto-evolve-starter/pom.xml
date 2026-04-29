@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.ontoevolve</groupId>
+        <artifactId>ontoevolve-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>onto-evolve-starter</artifactId>
+    <name>OntoEvolve :: Spring Boot Starter</name>
+    <dependencies>
+        <dependency>
+            <groupId>com.ontoevolve</groupId>
+            <artifactId>onto-evolve-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ontoevolve</groupId>
+            <artifactId>onto-evolve-plugins</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ontoevolve</groupId>
+            <artifactId>onto-evolve-infra</artifactId>
+        </dependency>
+        <!--
+          LLM 供应商由使用方决定，starter 只依赖核心抽象。
+          在你的领域模块中添加具体供应商依赖，例如:
+            OpenAI:    spring-ai-openai-spring-boot-starter
+            DeepSeek:  spring-ai-openai (设置 base-url=https://api.deepseek.com)
+            Anthropic: spring-ai-anthropic-spring-boot-starter
+            Ollama:    spring-ai-ollama-spring-boot-starter
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+</project>

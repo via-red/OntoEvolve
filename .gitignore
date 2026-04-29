@@ -1,16 +1,11 @@
-# Compiled class file
+# === Build outputs ===
+target/
+build/
+bin/
+out/
 *.class
 
-# Log file
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
+# === Package files ===
 *.jar
 *.war
 *.nar
@@ -19,6 +14,91 @@
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+# === Maven specific ===
+!target/*.xml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+*.flattened-pom.xml
+
+# === IDE - IntelliJ IDEA ===
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# === IDE - VS Code ===
+.vscode/
+*.code-workspace
+
+# === IDE - Eclipse ===
+.project
+.classpath
+.settings/
+.factorypath
+*.prefs
+
+# === IDE - NetBeans ===
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# === OS files ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# === Logs & temp files ===
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+*.orig
+*.old
+
+# === Environment & secrets ===
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+secrets/
+
+# === Java specific ===
+*.ctxt
+.mtj.tmp/
 hs_err_pid*
 replay_pid*
+
+# === Node (if any) ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === Python (if any) ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# === Docker ===
+.docker/
+docker-compose.override.yml

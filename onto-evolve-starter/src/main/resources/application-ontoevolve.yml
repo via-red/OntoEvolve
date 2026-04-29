@@ -1,0 +1,77 @@
+# ============================================
+# OntoEvolve 默认配置
+# ============================================
+# AI 交互基于 Spring AI 核心抽象 (ChatClient)。
+# 供应商由使用方在领域项目中决定，通过 spring.ai.* 标准化配置。
+#
+# 常见供应商:
+#   DeepSeek:  spring.ai.openai.base-url=https://api.deepseek.com
+#   OpenAI:    spring.ai.openai.api-key=...
+#   Anthropic: spring.ai.anthropic.api-key=...
+#   Ollama:    spring.ai.ollama.base-url=http://localhost:11434
+#
+# 参考: https://docs.spring.io/spring-ai/reference/api/chat.html
+
+onto:
+  rdf:
+    store-type: tdb2
+    ontology-path: classpath:ontology/domain.ttl
+    base-namespace: http://ontoevolve/domain#
+    inference: rdfs
+
+  classifier:
+    implementation: com.ontoevolve.domain.education.service.LLMActionClassifier
+    unknown-concept:
+      auto-create: false
+      approval-queue: jdbc:queue:concept_approval
+
+  matcher:
+    implementation: com.ontoevolve.plugins.matcher.ParetoUCBMatcher
+    exploration-bonus: 0.1
+
+  evolution:
+    enabled: true
+    trigger:
+      feedback-count:
+        per-niche: 20
+      schedule:
+        cron: "0 0 2 * * ?"
+      manual: true
+    population:
+      default-capacity: 20
+    variators:
+      - type: LLM_GENERATE
+        weight: 2
+        exploration-rate: 0.15
+      - type: CROSSOVER
+        weight: 5
+        selection-pressure: 0.7
+      - type: PERTURB
+        weight: 1
+    selector:
+      implementation: com.ontoevolve.plugins.selector.ParetoCrowdingSelector
+    migration:
+      enabled: true
+      compatibility-threshold: 0.85
+      check-interval: "P7D"
+
+  meta:
+    enabled: false
+    optimizer: com.ontoevolve.plugins.meta.BayesianMetaOptimizer
+    parameters:
+      - explorationRate
+      - populationCapacity
+    target-metrics:
+      - averageHypervolume
+      - nicheDiversityIndex
+
+  observability:
+    evoltrace-store: memory
+    metrics:
+      prometheus:
+        enabled: false
+
+  credit:
+    assigner: ontology
+    lambda: 0.9
+    max-lookback: 30

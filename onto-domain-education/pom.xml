@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.ontoevolve</groupId>
+        <artifactId>ontoevolve-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>onto-domain-education</artifactId>
+    <name>OntoEvolve :: Domain :: Education</name>
+    <dependencies>
+        <dependency>
+            <groupId>com.ontoevolve</groupId>
+            <artifactId>onto-evolve-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ontoevolve</groupId>
+            <artifactId>onto-evolve-plugins</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ontoevolve</groupId>
+            <artifactId>onto-evolve-infra</artifactId>
+        </dependency>
+        <!--
+          AI 供应商驱动 — 选择一个（或换其他 provider）:
+
+          选项 A: OpenAI / DeepSeek（兼容 OpenAI API）
+          <dependency>
+              <groupId>org.springframework.ai</groupId>
+              <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
+          </dependency>
+          # application.yml 中设置:
+          #   spring.ai.openai.api-key=...
+          #   spring.ai.openai.base-url=https://api.deepseek.com  (DeepSeek 用)
+
+          选项 B: Anthropic Claude
+          <dependency>
+              <groupId>org.springframework.ai</groupId>
+              <artifactId>spring-ai-anthropic-spring-boot-starter</artifactId>
+          </dependency>
+
+          选项 C: Ollama（本地部署）
+          <dependency>
+              <groupId>org.springframework.ai</groupId>
+              <artifactId>spring-ai-ollama-spring-boot-starter</artifactId>
+          </dependency>
+        -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+    </dependencies>
+</project>

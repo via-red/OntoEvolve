@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.ontoevolve</groupId>
+    <artifactId>ontoevolve-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>OntoEvolve Parent</name>
+    <description>Ontology-Driven Self-Evolving Decision Framework</description>
+
+    <modules>
+        <module>onto-evolve-core</module>
+        <module>onto-evolve-plugins</module>
+        <module>onto-evolve-infra</module>
+        <module>onto-evolve-starter</module>
+        <module>onto-domain-education</module>
+    </modules>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>3.2.0</spring-boot.version>
+        <spring-ai.version>1.0.3</spring-ai.version>
+        <jena.version>5.0.0</jena.version>
+        <micrometer.version>1.12.0</micrometer.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Intra-module -->
+            <dependency>
+                <groupId>com.ontoevolve</groupId>
+                <artifactId>onto-evolve-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ontoevolve</groupId>
+                <artifactId>onto-evolve-plugins</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ontoevolve</groupId>
+                <artifactId>onto-evolve-infra</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Spring Boot -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Apache Jena (RDF/OWL) -->
+            <dependency>
+                <groupId>org.apache.jena</groupId>
+                <artifactId>jena-tdb2</artifactId>
+                <version>${jena.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.jena</groupId>
+                <artifactId>jena-arq</artifactId>
+                <version>${jena.version}</version>
+            </dependency>
+
+            <!-- Micrometer (metrics) -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-core</artifactId>
+                <version>${micrometer.version}</version>
+            </dependency>
+
+            <!-- Spring AI — BOM 统一管理版本 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- 显式声明版本，BOM 兜底 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-client-chat</artifactId>
+                <version>${spring-ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-openai</artifactId>
+                <version>${spring-ai.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

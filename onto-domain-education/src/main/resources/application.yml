@@ -1,0 +1,84 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: onto-education
+
+  # ============================================================
+  #  Spring AI  — 供应商无关配置
+  #  在下方选择一个供应商，注释掉其他的。
+  #  也可换为 Ollama（本地）或 Anthropic 等。
+  # ============================================================
+
+  ## 选项 A: DeepSeek (通过 OpenAI 兼容接口)
+  ai:
+    openai:
+      api-key: ${DEEPSEEK_API_KEY:sk-placeholder}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.7
+
+  ## 选项 B: OpenAI
+  # ai:
+  #   openai:
+  #     api-key: ${OPENAI_API_KEY}
+  #     chat:
+  #       options:
+  #         model: gpt-4o
+  #         temperature: 0.7
+
+  ## 选项 C: Anthropic Claude
+  # ai:
+  #   anthropic:
+  #     api-key: ${ANTHROPIC_API_KEY}
+  #     chat:
+  #       options:
+  #         model: claude-sonnet-4-20250514
+
+  ## 选项 D: Ollama 本地模型
+  # ai:
+  #   ollama:
+  #     base-url: http://localhost:11434
+  #     chat:
+  #       options:
+  #         model: llama3.2
+
+onto:
+  rdf:
+    store-type: memory
+    ontology-path: classpath:ontology/education.ttl
+    base-namespace: http://ontoevolve/education#
+    inference: rdfs
+
+  classifier:
+    implementation: com.ontoevolve.domain.education.service.LLMActionClassifier
+
+  evolution:
+    enabled: true
+    trigger:
+      feedback-count:
+        per-niche: 10
+      schedule:
+        cron: "0 0 2 * * ?"
+    population:
+      default-capacity: 12
+    variators:
+      - type: LLM_GENERATE
+        weight: 2
+      - type: CROSSOVER
+        weight: 3
+      - type: PERTURB
+        weight: 1
+    migration:
+      enabled: true
+      compatibility-threshold: 0.8
+
+  observability:
+    evoltrace-store: memory
+
+logging:
+  level:
+    com.ontoevolve: DEBUG
