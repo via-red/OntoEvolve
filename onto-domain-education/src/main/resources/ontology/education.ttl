@@ -1,0 +1,247 @@
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix edu:     <http://ontoevolve/education#> .
+
+# ====================================================================
+#  OntoEvolve Education Domain Ontology
+#  命名空间: http://ontoevolve/education#
+#  用途: 定义学生行为分类与干预决策的 OWL 本体
+#  推理: RDFS (subClassOf, subPropertyOf, domain, range)
+# ====================================================================
+
+edu: rdf:type owl:Ontology ;
+    rdfs:label "OntoEvolve Education Ontology" ;
+    rdfs:comment "学生行为分类与干预决策的本体定义" .
+
+# ====================================================================
+# 顶层分类
+# ====================================================================
+
+edu:Behavioral rdf:type owl:Class ;
+    rdfs:label "行为问题" ;
+    rdfs:comment "学生行为规范相关的问题类别" .
+
+edu:Academic rdf:type owl:Class ;
+    rdfs:label "学业问题" ;
+    rdfs:comment "学生学业表现相关的问题类别" .
+
+edu:Social rdf:type owl:Class ;
+    rdfs:label "社交问题" ;
+    rdfs:comment "学生社交互动相关的问题类别" .
+
+# ====================================================================
+# 行为问题子类
+# ====================================================================
+
+edu:ClassroomDisruption rdf:type owl:Class ;
+    rdfs:label "课堂扰乱" ;
+    rdfs:comment "课堂纪律违反，如喧哗、随意走动、打断教学" ;
+    rdfs:subClassOf edu:Behavioral .
+
+edu:PeerConflict rdf:type owl:Class ;
+    rdfs:label "同学冲突" ;
+    rdfs:comment "学生之间的争吵、打架或人际矛盾" ;
+    rdfs:subClassOf edu:Behavioral .
+
+edu:Noncompliance rdf:type owl:Class ;
+    rdfs:label "不服从管理" ;
+    rdfs:comment "不服从教师或学校管理人员的要求或规定" ;
+    rdfs:subClassOf edu:Behavioral .
+
+edu:Cyberbullying rdf:type owl:Class ;
+    rdfs:label "网络欺凌" ;
+    rdfs:comment "通过网络平台对同学进行言语攻击、骚扰或霸凌" ;
+    rdfs:subClassOf edu:Behavioral .
+
+edu:Truancy rdf:type owl:Class ;
+    rdfs:label "逃课/旷课" ;
+    rdfs:comment "未经请假擅自缺课、逃学" ;
+    rdfs:subClassOf edu:Behavioral .
+
+edu:SubstanceMisuse rdf:type owl:Class ;
+    rdfs:label "吸烟饮酒" ;
+    rdfs:comment "在校期间吸烟、饮酒或其他不良行为" ;
+    rdfs:subClassOf edu:Behavioral .
+
+# ====================================================================
+# 学业问题子类
+# ====================================================================
+
+edu:HomeworkMissing rdf:type owl:Class ;
+    rdfs:label "作业不交" ;
+    rdfs:comment "未按时完成或提交作业" ;
+    rdfs:subClassOf edu:Academic .
+
+edu:Cheating rdf:type owl:Class ;
+    rdfs:label "考试作弊" ;
+    rdfs:comment "考试中抄袭、夹带或其他学术不端行为" ;
+    rdfs:subClassOf edu:Academic .
+
+edu:LowPerformance rdf:type owl:Class ;
+    rdfs:label "成绩下滑" ;
+    rdfs:comment "考试成绩或平时表现显著下降" ;
+    rdfs:subClassOf edu:Academic .
+
+edu:Inattention rdf:type owl:Class ;
+    rdfs:label "课堂走神" ;
+    rdfs:comment "上课注意力不集中、走神、打瞌睡" ;
+    rdfs:subClassOf edu:Academic .
+
+edu:LateSubmission rdf:type owl:Class ;
+    rdfs:label "迟交作业" ;
+    rdfs:comment "作业晚于截止日期提交" ;
+    rdfs:subClassOf edu:Academic .
+
+# ====================================================================
+# 社交问题子类
+# ====================================================================
+
+edu:SocialWithdrawal rdf:type owl:Class ;
+    rdfs:label "社交退缩" ;
+    rdfs:comment "回避集体活动、不愿与同学交往" ;
+    rdfs:subClassOf edu:Social .
+
+edu:DisruptiveBehavior rdf:type owl:Class ;
+    rdfs:label "破坏公物" ;
+    rdfs:comment "故意损坏学校财产或他人财物" ;
+    rdfs:subClassOf edu:Social .
+
+# ====================================================================
+# 干预方案类型（决策）
+# ====================================================================
+
+edu:Intervention rdf:type owl:Class ;
+    rdfs:label "干预方案" ;
+    rdfs:comment "针对学生行为问题的干预决策方案" .
+
+edu:TalkIntervention rdf:type owl:Class ;
+    rdfs:label "谈话教育" ;
+    rdfs:comment "一对一谈话教育干预" ;
+    rdfs:subClassOf edu:Intervention .
+
+edu:NoticeIntervention rdf:type owl:Class ;
+    rdfs:label "通知家长" ;
+    rdfs:comment "通知家长并协同教育" ;
+    rdfs:subClassOf edu:Intervention .
+
+edu:ActivityIntervention rdf:type owl:Class ;
+    rdfs:label "活动引导" ;
+    rdfs:comment "通过课外活动或集体活动引导行为改善" ;
+    rdfs:subClassOf edu:Intervention .
+
+edu:RewardIntervention rdf:type owl:Class ;
+    rdfs:label "奖励机制" ;
+    rdfs:comment "设立正向激励以强化良好行为" ;
+    rdfs:subClassOf edu:Intervention .
+
+edu:CounselingIntervention rdf:type owl:Class ;
+    rdfs:label "心理辅导" ;
+    rdfs:comment "转介学校心理辅导老师进行专业干预" ;
+    rdfs:subClassOf edu:Intervention .
+
+edu:AcademicSupport rdf:type owl:Class ;
+    rdfs:label "学业辅导" ;
+    rdfs:comment "安排课后补习或学习支持计划" ;
+    rdfs:subClassOf edu:Intervention .
+
+# ====================================================================
+# 数据属性
+# ====================================================================
+
+edu:hasSeverity rdf:type owl:DatatypeProperty ;
+    rdfs:label "严重程度" ;
+    rdfs:domain edu:Behavioral , edu:Academic , edu:Social ;
+    rdfs:range xsd:string ;
+    rdfs:comment "事件严重程度: mild / moderate / severe / critical" .
+
+edu:hasCategory rdf:type owl:DatatypeProperty ;
+    rdfs:label "类别标签" ;
+    rdfs:domain edu:Behavioral , edu:Academic , edu:Social ;
+    rdfs:range xsd:string .
+
+edu:hasInterventionType rdf:type owl:DatatypeProperty ;
+    rdfs:label "干预方式" ;
+    rdfs:domain edu:Intervention ;
+    rdfs:range xsd:string .
+
+edu:requiresParentApproval rdf:type owl:DatatypeProperty ;
+    rdfs:label "需要家长同意" ;
+    rdfs:domain edu:Intervention ;
+    rdfs:range xsd:boolean .
+
+edu:hasStudentId rdf:type owl:DatatypeProperty ;
+    rdfs:label "学生编号" ;
+    rdfs:range xsd:string .
+
+edu:hasLocation rdf:type owl:DatatypeProperty ;
+    rdfs:label "事件地点" ;
+    rdfs:range xsd:string .
+
+edu:hasTimestamp rdf:type owl:DatatypeProperty ;
+    rdfs:label "时间戳" ;
+    rdfs:range xsd:dateTime .
+
+# ====================================================================
+# 对象属性
+# ====================================================================
+
+edu:classifiedAs rdf:type owl:ObjectProperty ;
+    rdfs:label "分类为" ;
+    rdfs:comment "将事件分类为某种行为类型" ;
+    rdfs:range edu:Behavioral , edu:Academic , edu:Social .
+
+edu:recommends rdf:type owl:ObjectProperty ;
+    rdfs:label "推荐方案" ;
+    rdfs:comment "针对某类问题推荐的干预方案" ;
+    rdfs:domain edu:Behavioral , edu:Academic , edu:Social ;
+    rdfs:range edu:Intervention .
+
+edu:relatedTo rdf:type owl:ObjectProperty ;
+    rdfs:label "相关" ;
+    rdfs:comment "行为类型之间的关联关系" .
+
+# ====================================================================
+# 反馈维度
+# ====================================================================
+
+edu:Feedback rdf:type owl:Class ;
+    rdfs:label "反馈评价" ;
+    rdfs:comment "干预效果的多维反馈评估" .
+
+edu:hasEffectiveness rdf:type owl:DatatypeProperty ;
+    rdfs:label "效果评分" ;
+    rdfs:domain edu:Feedback ;
+    rdfs:range xsd:decimal .
+
+edu:hasCost rdf:type owl:DatatypeProperty ;
+    rdfs:label "成本评分" ;
+    rdfs:domain edu:Feedback ;
+    rdfs:range xsd:decimal .
+
+edu:hasSatisfaction rdf:type owl:DatatypeProperty ;
+    rdfs:label "满意度" ;
+    rdfs:domain edu:Feedback ;
+    rdfs:range xsd:decimal .
+
+edu:hasLongTermEffect rdf:type owl:DatatypeProperty ;
+    rdfs:label "长期效果" ;
+    rdfs:domain edu:Feedback ;
+    rdfs:range xsd:decimal .
+
+# ====================================================================
+# 进化相关
+# ====================================================================
+
+edu:EvolutionaryRecord rdf:type owl:Class ;
+    rdfs:label "进化记录" ;
+    rdfs:comment "干预方案的进化历史记录" .
+
+edu:hasGeneration rdf:type owl:DatatypeProperty ;
+    rdfs:label "进化代数" ;
+    rdfs:range xsd:integer .
+
+edu:hasFitness rdf:type owl:DatatypeProperty ;
+    rdfs:label "适应度" ;
+    rdfs:range xsd:decimal .
