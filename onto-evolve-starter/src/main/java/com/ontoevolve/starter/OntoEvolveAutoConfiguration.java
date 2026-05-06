@@ -6,6 +6,8 @@ import com.ontoevolve.core.spi.*;
 import com.ontoevolve.core.validation.OntologyValidator;
 import com.ontoevolve.infra.llm.LLMClient;
 import com.ontoevolve.infra.metrics.MetricsCollector;
+import com.ontoevolve.infra.store.OntologyStore;
+import com.ontoevolve.infra.store.Tdb2OntologyStore;
 import com.ontoevolve.plugins.credit.UniformCreditAssigner;
 import com.ontoevolve.plugins.matcher.ParetoUCBMatcher;
 import com.ontoevolve.plugins.meta.BayesianMetaOptimizer;
@@ -141,6 +143,18 @@ public class OntoEvolveAutoConfiguration {
     }
 
     // ==================== 基础设施 ====================
+
+    @Bean
+    @ConditionalOnMissingBean(OntologyStore.class)
+    @ConditionalOnProperty(prefix = "onto.rdf", name = "store-type",
+            havingValue = "tdb2", matchIfMissing = true)
+    public OntologyStore ontologyStore(OntoEvolveConfig config) {
+        var rdf = config.getRdf();
+        String storePath = System.getProperty("java.io.tmpdir") + "/ontoevolve-tdb2";
+        Tdb2OntologyStore store = new Tdb2OntologyStore(storePath);
+        store.initialize(rdf.getOntologyPath(), rdf.getBaseNamespace(), rdf.getInference());
+        return store;
+    }
 
     @Bean
     @ConditionalOnMissingBean

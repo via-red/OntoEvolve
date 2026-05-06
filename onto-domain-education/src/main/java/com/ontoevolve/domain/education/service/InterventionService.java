@@ -2,9 +2,9 @@ package com.ontoevolve.domain.education.service;
 
 import com.ontoevolve.core.kernel.EvolutionEngine;
 import com.ontoevolve.core.model.Assignment;
-import com.ontoevolve.core.model.Feedback;
+import com.ontoevolve.core.model.Concept;
+import com.ontoevolve.core.spi.Classifier;
 import com.ontoevolve.core.spi.Matcher;
-import com.ontoevolve.core.spi.Selector;
 import com.ontoevolve.domain.education.model.ActionEvent;
 import com.ontoevolve.domain.education.model.ActionType;
 import com.ontoevolve.domain.education.model.Intervention;
@@ -27,13 +27,13 @@ public class InterventionService {
     private final EvolutionEngine evolutionEngine;
     private final Matcher<ActionType, Intervention, Assignment> matcher;
     private final MetricsCollector metrics;
-    private final LLMActionClassifier classifier;
+    private final Classifier<ActionEvent, ActionType> classifier;
 
     public InterventionService(EducationOntologyService ontologyService,
                                EvolutionEngine evolutionEngine,
                                Matcher<?, ?, ?> matcher,
                                MetricsCollector metrics,
-                               LLMActionClassifier classifier) {
+                               Classifier<ActionEvent, ActionType> classifier) {
         this.ontologyService = ontologyService;
         this.evolutionEngine = evolutionEngine;
         this.matcher = (Matcher<ActionType, Intervention, Assignment>) matcher;
@@ -51,17 +51,30 @@ public class InterventionService {
         // 1. LLM 分类：基于自然语言描述确定行为类型
         ActionType actionType = classifier.classify(event);
 
-        // 2. 确保种群存在
-        var pop = evolutionEngine.getOrCreatePopulation(actionType, 12);
+        // 2. 沿概念层次递归匹配，子概念无匹配时回退父概念
+        return findMatchHierarchy(actionType, event);
+    }
 
-        // 3. 匹配最优方案（支持种群感知的 Matcher 利用多样性信息）
+    /** 递归查找：从 actionType 开始匹配，若无匹配则回退父概念 */
+    private Intervention findMatchHierarchy(ActionType actionType, ActionEvent event) {
+        if (actionType == null) return null;
+
+        var pop = evolutionEngine.getOrCreatePopulation(actionType, 12);
         var context = new Matcher.Context(event.getStudentId(),
                 Map.of("severity", event.getSeverity()));
-        var population = pop.getActiveMembers();
-        Assignment match = matcher.match(actionType, context, population);
+        Assignment matched = matcher.match(actionType, context, pop.getActiveMembers());
 
-        // 4. 如果没有匹配，返回 null（应由外层决定默认行为）
-        return match != null ? (Intervention) match.getDecision() : null;
+        if (matched != null) {
+            return (Intervention) matched.getDecision();
+        }
+
+        // 回退到父概念
+        Concept parent = actionType.getParentConcept();
+        if (parent instanceof ActionType parentType) {
+            return findMatchHierarchy(parentType, event);
+        }
+
+        return null;
     }
 
     /**

@@ -30,8 +30,17 @@ public class Tdb2OntologyStore implements OntologyStore {
     @Override
     public void initialize(String ontologyPath, String baseNamespace, String inferenceMode) {
         dataset = TDB2Factory.connectDataset(storePath);
-        // 生产环境应在此处加载本体文件到 dataset
-        // dataset.getDefaultModel().read(ontologyPath, "TURTLE");
+
+        // 加载本体文件到 dataset，支持 classpath: 前缀
+        String resolvedPath = ontologyPath;
+        if (ontologyPath != null && ontologyPath.startsWith("classpath:")) {
+            String resourcePath = ontologyPath.substring("classpath:".length());
+            var resource = getClass().getClassLoader().getResource(resourcePath);
+            if (resource != null) {
+                resolvedPath = resource.toString();
+            }
+        }
+        dataset.getDefaultModel().read(resolvedPath, "TURTLE");
     }
 
     @Override

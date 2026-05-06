@@ -1,5 +1,7 @@
 package com.ontoevolve.domain.education.service;
 
+import com.ontoevolve.core.model.InputEvent;
+import com.ontoevolve.core.spi.Classifier;
 import com.ontoevolve.domain.education.model.ActionEvent;
 import com.ontoevolve.domain.education.model.ActionType;
 import com.ontoevolve.infra.llm.LLMClient;
@@ -12,7 +14,7 @@ import org.springframework.stereotype.Component;
  * 利用 Spring AI ChatClient（可切换底层模型）进行语义理解。
  */
 @Component
-public class LLMActionClassifier {
+public class LLMActionClassifier implements Classifier<ActionEvent, ActionType> {
 
     private final LLMClient llmClient;
     private final EducationOntologyService ontologyService;
@@ -71,5 +73,10 @@ public class LLMActionClassifier {
                 ? "academic" : "behavioral";
         return ontologyService.getOrCreateActionType(
                 event.getBehaviorDescription(), category);
+    }
+
+    @Override
+    public boolean supportsUnknown() {
+        return true;
     }
 }

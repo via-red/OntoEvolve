@@ -81,6 +81,13 @@ public class EvolutionEngine {
         if (pop == null || pop.getActiveMembers().isEmpty()) return;
 
         pop.incrementGeneration();
+
+        // 元优化器调整选择参数（即使没有变异，也更新内部状态）
+        if (metaOptimizer != null && config != null && config.getMeta().isEnabled()) {
+            GlobalMetrics metrics = buildGlobalMetrics();
+            metaOptimizer.optimize(metrics);
+        }
+
         List<Assignment> candidates = new ArrayList<>(pop.getAllMembers());
         List<Assignment> selected = selector.select(candidates, pop.getMaxSize());
         applySelection(pop, selected);
