@@ -10,13 +10,13 @@ import java.util.Map;
  * 无需重新编译即可调整系统行为。
  */
 public class OntoEvolveConfig {
-    private RdfConfig rdf;
-    private ClassifierConfig classifier;
-    private MatcherConfig matcher;
-    private EvolutionConfig evolution;
-    private MetaConfig meta;
-    private ObservabilityConfig observability;
-    private CreditConfig credit;
+    private RdfConfig rdf = new RdfConfig();
+    private ClassifierConfig classifier = new ClassifierConfig();
+    private MatcherConfig matcher = new MatcherConfig();
+    private EvolutionConfig evolution = new EvolutionConfig();
+    private MetaConfig meta = new MetaConfig();
+    private ObservabilityConfig observability = new ObservabilityConfig();
+    private CreditConfig credit = new CreditConfig();
 
     // --- RDF 存储 ---
     public static class RdfConfig {
@@ -84,15 +84,15 @@ public class OntoEvolveConfig {
     // --- 进化引擎 ---
     public static class EvolutionConfig {
         private boolean enabled = true;
-        private TriggerConfig trigger;
-        private PopulationConfig population;
+        private TriggerConfig trigger = new TriggerConfig();
+        private PopulationConfig population = new PopulationConfig();
         private List<VariatorConfig> variators;
-        private SelectorConfig selector;
-        private MigrationConfig migration;
+        private SelectorConfig selector = new SelectorConfig();
+        private MigrationConfig migration = new MigrationConfig();
 
         public static class TriggerConfig {
-            private FeedbackCountConfig feedbackCount;
-            private ScheduleConfig schedule;
+            private FeedbackCountConfig feedbackCount = new FeedbackCountConfig();
+            private ScheduleConfig schedule = new ScheduleConfig();
             private boolean manual = true;
 
             public static class FeedbackCountConfig {

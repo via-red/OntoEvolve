@@ -20,7 +20,8 @@ onto:
     inference: rdfs
 
   classifier:
-    implementation: com.ontoevolve.domain.education.service.LLMActionClassifier
+    # 由领域项目指定自己的 Classifier SPI 实现类全限定名
+    # 例如: com.example.MyClassifier
     unknown-concept:
       auto-create: false
       approval-queue: jdbc:queue:concept_approval

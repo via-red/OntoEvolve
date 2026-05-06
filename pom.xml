@@ -49,6 +49,11 @@
                 <artifactId>onto-evolve-infra</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.ontoevolve</groupId>
+                <artifactId>onto-evolve-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Spring Boot -->
             <dependency>

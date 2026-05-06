@@ -20,7 +20,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -36,14 +36,21 @@ import java.util.List;
  * 通过 spring.ai.openai.api-key 等标准配置驱动。
  */
 @Configuration
-@EnableConfigurationProperties(OntoEvolveConfig.class)
 public class OntoEvolveAutoConfiguration {
+
+    // ==================== 配置 ====================
+
+    @Bean
+    @ConfigurationProperties(prefix = "onto")
+    public OntoEvolveConfig ontoEvolveConfig() {
+        return new OntoEvolveConfig();
+    }
 
     // ==================== Spring AI ChatClient ====================
 
     /**
-     * ChatClient.Builder 由 Spring AI 自动配置提供（基于 spring.ai.* 配置）。
-     * 可在此处覆盖默认 system prompt 或自定义构建逻辑。
+     * ChatClient.Builder 由领域模块的 @Bean 提供（如 OpenAiChatConfig），
+     * 以便 Starter 保持 LLM 供应商无关。
      */
     @Bean
     @ConditionalOnMissingBean

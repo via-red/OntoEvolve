@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * 本体因果链信用分配器。
  * <p>
- * 利用本体中定义的因果链属性（如 Intervention → BehaviorChange → Outcome），
+ * 利用本体中定义的因果链属性（如 Action → Effect → Outcome），
  * 将延迟到达的长期反馈沿因果路径回溯分配到相关的历史 Execution。
  * <p>
  * 分配权重由时间衰减和因果距离共同决定。

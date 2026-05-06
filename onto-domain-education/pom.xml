@@ -23,6 +23,10 @@
             <groupId>com.ontoevolve</groupId>
             <artifactId>onto-evolve-infra</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.ontoevolve</groupId>
+            <artifactId>onto-evolve-starter</artifactId>
+        </dependency>
         <!--
           AI 供应商驱动 — 选择一个（或换其他 provider）:
 
