@@ -76,8 +76,25 @@ onto:
       enabled: true
       compatibility-threshold: 0.8
 
+  meta:
+    enabled: true
+    parameters:
+      - explorationRate
+      - populationCapacity
+    target-metrics:
+      - averageHypervolume
+      - nicheDiversityIndex
+
+  credit:
+    assigner: com.ontoevolve.plugins.credit.UniformCreditAssigner
+    lambda: 0.9
+    max-lookback: 30
+
   observability:
     evoltrace-store: memory
+    metrics:
+      prometheus:
+        enabled: false
 
 logging:
   level:

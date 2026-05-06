@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>OntoEvolve 管理仪表盘</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f5f7fa; color: #1a1a2e; padding: 20px; }
+        header { margin-bottom: 24px; }
+        h1 { font-size: 24px; font-weight: 600; color: #16213e; }
+        h1 small { font-size: 14px; font-weight: 400; color: #6b7280; margin-left: 8px; }
+        h2 { font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .card h3 { font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+        .card .value { font-size: 32px; font-weight: 700; color: #16213e; }
+        .card .sub { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        th, td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+        th { background: #f9fafb; font-weight: 600; color: #374151; }
+        tr:hover { background: #f3f4f6; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge.active { background: #d1fae5; color: #065f46; }
+        .badge.newborn { background: #dbeafe; color: #1e40af; }
+        .badge.elite { background: #fef3c7; color: #92400e; }
+        .badge.probation { background: #fce7f3; color: #9d174d; }
+        .badge.deprecated { background: #e5e7eb; color: #4b5563; }
+        .btn { display: inline-block; padding: 8px 16px; border-radius: 6px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .mt-4 { margin-top: 16px; }
+        .mb-4 { margin-bottom: 16px; }
+        .flex { display: flex; align-items: center; gap: 12px; }
+        .tab { display: flex; gap: 4px; margin-bottom: 16px; }
+        .tab a { padding: 8px 16px; border-radius: 6px 6px 0 0; text-decoration: none; color: #6b7280; font-size: 13px; font-weight: 500; }
+        .tab a.active { background: white; color: #2563eb; box-shadow: 0 -1px 3px rgba(0,0,0,.05); }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        pre { background: #1f2937; color: #e5e7eb; padding: 16px; border-radius: 8px; overflow: auto; font-size: 12px; max-height: 400px; }
+        .refresh { color: #2563eb; cursor: pointer; font-size: 13px; }
+        .refresh:hover { text-decoration: underline; }
+        .toast { position: fixed; bottom: 24px; right: 24px; background: #065f46; color: white; padding: 12px 20px; border-radius: 8px; font-size: 13px; display: none; }
+        @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<header class="flex">
+    <h1>OntoEvolve <small>v0.2.0</small></h1>
+    <span class="refresh" onclick="refreshAll()">⟳ 刷新</span>
+</header>
+
+<div class="tab">
+    <a href="#" class="active" data-tab="overview" onclick="switchTab('overview')">概览</a>
+    <a href="#" data-tab="populations" onclick="switchTab('populations')">种群</a>
+    <a href="#" data-tab="traces" onclick="switchTab('traces')">谱系</a>
+    <a href="#" data-tab="debug" onclick="switchTab('debug')">调试</a>
+</div>
+
+<!-- 概览面板 -->
+<div id="panel-overview" class="panel active">
+    <div class="grid" id="metrics-grid">
+        <div class="card"><h3>反馈总数</h3><div class="value" id="metric-feedback">-</div></div>
+        <div class="card"><h3>LLM 调用</h3><div class="value" id="metric-llm">-</div></div>
+        <div class="card"><h3>平均超体积</h3><div class="value" id="metric-hv">-</div></div>
+        <div class="card"><h3>多样性指数</h3><div class="value" id="metric-diversity">-</div></div>
+        <div class="card"><h3>生态位数</h3><div class="value" id="metric-populations">-</div></div>
+    </div>
+
+    <h2 class="mt-4">种群列表</h2>
+    <table id="population-table">
+        <thead><tr><th>生态位</th><th>代数</th><th>方案数</th><th>操作</th></tr></thead>
+        <tbody id="population-tbody"></tbody>
+    </table>
+</div>
+
+<!-- 种群面板 -->
+<div id="panel-populations" class="panel">
+    <div class="flex mb-4">
+        <select id="niche-select" onchange="loadPopulationDetail()" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;font-size:13px;">
+            <option value="">选择生态位...</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="triggerEvolution()">触发进化</button>
+    </div>
+    <table id="detail-table">
+        <thead><tr><th>方案名</th><th>得分向量</th><th>试验次数</th><th>代数</th><th>状态</th></tr></thead>
+        <tbody id="detail-tbody"></tbody>
+    </table>
+</div>
+
+<!-- 谱系面板 -->
+<div id="panel-traces" class="panel">
+    <table>
+        <thead><tr><th>时间</th><th>操作类型</th><th>方案名</th><th>上下文</th></tr></thead>
+        <tbody id="traces-tbody"></tbody>
+    </table>
+</div>
+
+<!-- 调试面板 -->
+<div id="panel-debug" class="panel">
+    <h2>API 测试</h2>
+    <div class="flex mb-4" style="flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="testPostEvent()">POST 测试事件</button>
+        <button class="btn btn-primary btn-sm" onclick="testPostEvaluation()">POST 测试评价</button>
+    </div>
+    <pre id="debug-output">点击按钮发送测试请求，结果将显示在这里。</pre>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+    const BASE = '/api/education';
+
+    function switchTab(name) {
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab a').forEach(a => a.classList.remove('active'));
+        document.getElementById('panel-' + name).classList.add('active');
+        document.querySelector(`.tab a[data-tab="${name}"]`).classList.add('active');
+        if (name === 'populations') loadNicheSelect();
+    }
+
+    async function api(path, opts = {}) {
+        const res = await fetch(BASE + path, opts);
+        return res.json();
+    }
+
+    async function refreshAll() {
+        await loadMetrics();
+        await loadPopulations();
+        await loadTraces();
+        if (document.getElementById('niche-select').value) loadPopulationDetail();
+        showToast('已刷新');
+    }
+
+    async function loadMetrics() {
+        try {
+            const data = await api('/metrics');
+            document.getElementById('metric-feedback').textContent = data.totalFeedbacks ?? 0;
+            document.getElementById('metric-llm').textContent = data.llmCalls ?? 0;
+            document.getElementById('metric-hv').textContent = (data.averageHypervolume ?? 0).toFixed(4);
+            document.getElementById('metric-diversity').textContent = (data.nicheDiversity ?? 0).toFixed(4);
+            document.getElementById('metric-populations').textContent = data.totalPopulations ?? 0;
+        } catch (e) { console.error('loadMetrics', e); }
+    }
+
+    async function loadPopulations() {
+        // Populate from the traces/evolve endpoints
+    }
+
+    async function loadTraces() {
+        try {
+            const data = await api('/traces');
+            const tbody = document.getElementById('traces-tbody');
+            tbody.innerHTML = data.map(t => `
+                <tr>
+                    <td>${t.timestamp || '-'}</td>
+                    <td><span class="badge active">${t.type || '-'}</span></td>
+                    <td>${t.decision || '-'}</td>
+                    <td>${t.context || '-'}</td>
+                </tr>
+            `).join('');
+        } catch (e) { console.error('loadTraces', e); }
+    }
+
+    async function loadNicheSelect() {
+        try {
+            const data = await api('/metrics'); // Use this to get population count
+            const select = document.getElementById('niche-select');
+            select.innerHTML = '<option value="">选择生态位...</option>';
+            // We need to know the IRIs - for now add known ones
+            const knownNiches = [
+                'http://ontoevolve/education#ClassroomDisruption',
+                'http://ontoevolve/education#PeerConflict',
+                'http://ontoevolve/education#HomeworkMissing',
+                'http://ontoevolve/education#Cheating'
+            ];
+            knownNiches.forEach(iri => {
+                const label = iri.split('#')[1] || iri;
+                const opt = document.createElement('option');
+                opt.value = iri;
+                opt.textContent = label;
+                select.appendChild(opt);
+            });
+        } catch (e) { console.error('loadNicheSelect', e); }
+    }
+
+    async function loadPopulationDetail() {
+        const iri = document.getElementById('niche-select').value;
+        if (!iri) return;
+        try {
+            const data = await api('/populations/' + encodeURIComponent(iri));
+            const tbody = document.getElementById('detail-tbody');
+            tbody.innerHTML = (data.members || []).map(m => {
+                const statusClass = (m.status || '').toLowerCase();
+                return `<tr>
+                    <td>${m.name || '-'}</td>
+                    <td>${Array.isArray(m.score) ? m.score.map(s => s.toFixed(4)).join(', ') : m.score || '-'}</td>
+                    <td>${m.trials ?? 0}</td>
+                    <td>${m.generation ?? 0}</td>
+                    <td><span class="badge ${statusClass}">${m.status || '-'}</span></td>
+                </tr>`;
+            }).join('');
+        } catch (e) { console.error('loadPopulationDetail', e); }
+    }
+
+    async function triggerEvolution() {
+        const iri = document.getElementById('niche-select').value;
+        if (!iri) { showToast('请先选择生态位'); return; }
+        try {
+            await api('/evolve?conceptIri=' + encodeURIComponent(iri), { method: 'POST' });
+            showToast('进化触发成功');
+            await loadPopulationDetail();
+            await loadMetrics();
+        } catch (e) { showToast('请求失败'); }
+    }
+
+    async function testPostEvent() {
+        const out = document.getElementById('debug-output');
+        try {
+            const res = await fetch(BASE + '/event', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    description: '学生在课堂上大声喧哗，影响其他同学听课',
+                    studentId: 'STU001',
+                    severity: 'moderate'
+                })
+            });
+            const data = await res.json();
+            out.textContent = 'POST /event → ' + res.status + '\n' + JSON.stringify(data, null, 2);
+        } catch (e) { out.textContent = 'Error: ' + e.message; }
+    }
+
+    async function testPostEvaluation() {
+        const out = document.getElementById('debug-output');
+        try {
+            const res = await fetch(BASE + '/evaluation', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ effectiveness: 0.8, cost: 0.2, satisfaction: 0.9 })
+            });
+            const data = await res.text();
+            out.textContent = 'POST /evaluation → ' + res.status + '\n' + data;
+        } catch (e) { out.textContent = 'Error: ' + e.message; }
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 2000);
+    }
+
+    // Initial load
+    refreshAll();
+</script>
+</body>
+</html>

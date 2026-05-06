@@ -6,13 +6,16 @@ import com.ontoevolve.core.spi.*;
 import com.ontoevolve.core.validation.OntologyValidator;
 import com.ontoevolve.infra.llm.LLMClient;
 import com.ontoevolve.infra.metrics.MetricsCollector;
+import com.ontoevolve.plugins.credit.UniformCreditAssigner;
 import com.ontoevolve.plugins.matcher.ParetoUCBMatcher;
+import com.ontoevolve.plugins.meta.BayesianMetaOptimizer;
 import com.ontoevolve.plugins.migrator.SemanticMigrator;
 import com.ontoevolve.plugins.selector.ParetoCrowdingSelector;
 import com.ontoevolve.plugins.variator.CrossoverVariator;
 import com.ontoevolve.plugins.variator.LLMGenerateVariator;
 import com.ontoevolve.plugins.variator.PerturbVariator;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -88,6 +91,29 @@ public class OntoEvolveAutoConfiguration {
         return List.of(llm, crossover, perturb);
     }
 
+    // ==================== 信用分配 ====================
+
+    @Bean
+    @ConditionalOnMissingBean(CreditAssigner.class)
+    @ConditionalOnProperty(prefix = "onto.credit", name = "assigner",
+            havingValue = "com.ontoevolve.plugins.credit.UniformCreditAssigner",
+            matchIfMissing = true)
+    public CreditAssigner uniformCreditAssigner(OntoEvolveConfig config) {
+        return new UniformCreditAssigner(
+                config.getCredit().getLambda(),
+                config.getCredit().getMaxLookback());
+    }
+
+    // ==================== 元优化器 ====================
+
+    @Bean
+    @ConditionalOnMissingBean(MetaOptimizer.class)
+    @ConditionalOnProperty(prefix = "onto.meta", name = "enabled",
+            havingValue = "true", matchIfMissing = false)
+    public MetaOptimizer bayesianMetaOptimizer() {
+        return new BayesianMetaOptimizer();
+    }
+
     // ==================== 进化引擎 ====================
 
     @Bean
@@ -98,12 +124,20 @@ public class OntoEvolveAutoConfiguration {
             List<Variator<?, ?>> variators,
             Selector<?> selector,
             Migrator<?> migrator,
-            OntologyValidator ontologyValidator) {
-        return new EvolutionEngine(
+            OntologyValidator ontologyValidator,
+            OntoEvolveConfig config,
+            ObjectProvider<MetaOptimizer> metaOptimizerProvider) {
+        EvolutionEngine engine = new EvolutionEngine(
                 (Selector) selector,
                 (List) variators,
                 (Migrator) migrator,
                 ontologyValidator);
+        engine.setConfig(config);
+        MetaOptimizer metaOptimizer = metaOptimizerProvider.getIfAvailable();
+        if (metaOptimizer != null) {
+            engine.setMetaOptimizer(metaOptimizer);
+        }
+        return engine;
     }
 
     // ==================== 基础设施 ====================
