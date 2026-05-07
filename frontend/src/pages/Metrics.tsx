@@ -28,7 +28,7 @@ export default function Metrics() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = () => api.getMetrics().then(setMetrics).catch(() => {});
+    const load = () => api.getMetrics().then(setMetrics).catch(() => {}).finally(() => setLoading(false));
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
