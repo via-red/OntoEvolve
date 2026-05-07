@@ -3,6 +3,7 @@ package com.ontoevolve.core.kernel;
 import com.ontoevolve.core.model.Assignment;
 import com.ontoevolve.core.model.Concept;
 import com.ontoevolve.core.spi.*;
+import com.ontoevolve.core.store.InMemoryPopulationStore;
 import com.ontoevolve.core.validation.OntologyValidator;
 import com.ontoevolve.core.config.OntoEvolveConfig;
 
@@ -21,26 +22,34 @@ public class EvolutionEngine {
     private final Map<String, Integer> variatorWeights;
     private final Migrator<Assignment> migrator;
     private final OntologyValidator ontologyValidator;
-    private final Map<String, DecisionPopulation> populations;
-    private final Map<String, Integer> feedbackCounters;
-    private final List<EvolTrace> traces;
-    private final Random random;
+    private PopulationStore populationStore;
     private MetaOptimizer metaOptimizer;
     private OntoEvolveConfig config;
+    private final Random random = new Random();
 
     public EvolutionEngine(Selector<Assignment> selector,
                            List<Variator> variators,
                            Migrator<Assignment> migrator,
                            OntologyValidator ontologyValidator) {
+        this(selector, variators, migrator, ontologyValidator, null);
+    }
+
+    public EvolutionEngine(Selector<Assignment> selector,
+                           List<Variator> variators,
+                           Migrator<Assignment> migrator,
+                           OntologyValidator ontologyValidator,
+                           PopulationStore populationStore) {
         this.selector = selector;
         this.variators = variators;
         this.variatorWeights = new HashMap<>();
         this.migrator = migrator;
         this.ontologyValidator = ontologyValidator;
-        this.populations = new HashMap<>();
-        this.feedbackCounters = new HashMap<>();
-        this.traces = new ArrayList<>();
-        this.random = new Random();
+        this.populationStore = populationStore != null
+                ? populationStore : new InMemoryPopulationStore();
+    }
+
+    public void setPopulationStore(PopulationStore populationStore) {
+        this.populationStore = populationStore;
     }
 
     public void setMetaOptimizer(MetaOptimizer metaOptimizer) {
@@ -61,26 +70,25 @@ public class EvolutionEngine {
 
     /** 注册或获取一个生态位的种群 */
     public DecisionPopulation getOrCreatePopulation(Concept concept, int maxSize) {
-        return populations.computeIfAbsent(concept.getIri(),
-                k -> new DecisionPopulation(concept, maxSize));
+        return populationStore.findOrCreatePopulation(concept, maxSize);
     }
 
     /** 记录一条反馈，累积到阈值时触发中观重排 */
     public void recordFeedback(Concept concept) {
-        feedbackCounters.merge(concept.getIri(), 1, Integer::sum);
-        DecisionPopulation pop = populations.get(concept.getIri());
-        if (pop != null && pop.isEvolutionDue(feedbackCounters.get(concept.getIri()))) {
-            feedbackCounters.put(concept.getIri(), 0);
+        populationStore.incrementFeedbackCounter(concept);
+        DecisionPopulation pop = populationStore.getPopulation(concept.getIri()).orElse(null);
+        if (pop != null && pop.isEvolutionDue(populationStore.getFeedbackCount(concept))) {
+            populationStore.resetFeedbackCounter(concept);
             runLightEvolution(concept);
         }
     }
 
     /** 轻量级进化 — 仅重排与选择，不含 LLM 变异 */
     private void runLightEvolution(Concept concept) {
-        DecisionPopulation pop = populations.get(concept.getIri());
+        DecisionPopulation pop = populationStore.getPopulation(concept.getIri()).orElse(null);
         if (pop == null || pop.getActiveMembers().isEmpty()) return;
 
-        pop.incrementGeneration();
+        populationStore.incrementGeneration(concept);
 
         // 元优化器调整选择参数（即使没有变异，也更新内部状态）
         if (metaOptimizer != null && config != null && config.getMeta().isEnabled()) {
@@ -103,7 +111,7 @@ public class EvolutionEngine {
 
     /** 完整进化代 — 变异 + 选择 + 迁移 + 元优化 */
     public void runFullEvolution(Concept concept) {
-        DecisionPopulation pop = populations.get(concept.getIri());
+        DecisionPopulation pop = populationStore.getPopulation(concept.getIri()).orElse(null);
         if (pop == null) return;
 
         double explorationRate = 0.15;
@@ -114,7 +122,7 @@ public class EvolutionEngine {
             explorationRate = metaParams.getOrDefault("explorationRate", explorationRate);
         }
 
-        pop.incrementGeneration();
+        populationStore.incrementGeneration(concept);
         List<Assignment> current = pop.getActiveMembers();
 
         // 1. 变异：按配置权重随机选一个变异算子
@@ -189,13 +197,13 @@ public class EvolutionEngine {
     }
 
     private GlobalMetrics buildGlobalMetrics() {
-        double avgHypervolume = populations.values().stream()
+        double avgHypervolume = populationStore.getAllPopulations().values().stream()
                 .filter(p -> !p.getActiveMembers().isEmpty())
                 .mapToDouble(this::computeHypervolume)
                 .average().orElse(0.0);
         return new GlobalMetrics(
                 avgHypervolume, 0.0, 0.0, 0.0,
-                populations.size(), 0, Map.of());
+                populationStore.getAllPopulations().size(), 0, Map.of());
     }
 
     private double computeHypervolume(DecisionPopulation pop) {
@@ -229,7 +237,7 @@ public class EvolutionEngine {
                 .collect(Collectors.toList());
         if (elites.isEmpty()) return;
 
-        for (Map.Entry<String, DecisionPopulation> entry : populations.entrySet()) {
+        for (Map.Entry<String, DecisionPopulation> entry : populationStore.getAllPopulations().entrySet()) {
             if (entry.getKey().equals(concept.getIri())) continue;
             Concept targetConcept = entry.getValue().getConcept();
             List<Assignment> migrants = migrator.proposeMigrations(
@@ -243,9 +251,9 @@ public class EvolutionEngine {
     }
 
     public void addTrace(EvolTrace trace) {
-        traces.add(trace);
+        populationStore.addTrace(trace);
     }
 
-    public List<EvolTrace> getTraces() { return Collections.unmodifiableList(traces); }
-    public Map<String, DecisionPopulation> getPopulations() { return populations; }
+    public List<EvolTrace> getTraces() { return populationStore.getTraces(); }
+    public Map<String, DecisionPopulation> getPopulations() { return populationStore.getAllPopulations(); }
 }

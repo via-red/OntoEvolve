@@ -3,6 +3,7 @@ package com.ontoevolve.starter;
 import com.ontoevolve.core.config.OntoEvolveConfig;
 import com.ontoevolve.core.kernel.EvolutionEngine;
 import com.ontoevolve.core.spi.*;
+import com.ontoevolve.core.store.InMemoryPopulationStore;
 import com.ontoevolve.core.validation.OntologyValidator;
 import com.ontoevolve.infra.llm.LLMClient;
 import com.ontoevolve.infra.metrics.MetricsCollector;
@@ -135,12 +136,15 @@ public class OntoEvolveAutoConfiguration {
             Migrator<?> migrator,
             OntologyValidator ontologyValidator,
             OntoEvolveConfig config,
-            ObjectProvider<MetaOptimizer> metaOptimizerProvider) {
+            ObjectProvider<MetaOptimizer> metaOptimizerProvider,
+            ObjectProvider<PopulationStore> populationStoreProvider) {
+        PopulationStore store = populationStoreProvider.getIfAvailable();
         EvolutionEngine engine = new EvolutionEngine(
                 (Selector) selector,
                 (List) variators,
                 (Migrator) migrator,
-                ontologyValidator);
+                ontologyValidator,
+                store);
         engine.setConfig(config);
         MetaOptimizer metaOptimizer = metaOptimizerProvider.getIfAvailable();
         if (metaOptimizer != null) {
@@ -178,5 +182,11 @@ public class OntoEvolveAutoConfiguration {
                 return true; // 默认允许所有，由领域项目覆盖
             }
         };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(PopulationStore.class)
+    public PopulationStore inMemoryPopulationStore() {
+        return new InMemoryPopulationStore();
     }
 }

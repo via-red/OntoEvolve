@@ -18,7 +18,7 @@ public class Evaluation extends Feedback {
     public Evaluation(String iri, Execution execution,
                       double effectiveness, double cost, double satisfaction) {
         super(iri, execution,
-              new double[]{effectiveness, 1 - cost, satisfaction, 0},
+              new double[]{effectiveness, 1 - cost, satisfaction},
               Map.of("effectiveness", effectiveness,
                      "cost", cost,
                      "satisfaction", satisfaction));

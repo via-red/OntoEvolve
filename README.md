@@ -356,19 +356,42 @@ MetaOptimizer 在系统层面以更慢的节律（如每天）运行：
 │  │ Migrator     │  │ Execution    │  │ └─ MetaOptimizer           │  │
 │  │ MetaOptimizer│  │ Feedback     │  │                              │  │
 │  └─────────────┘  └──────────────┘  └────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ PopulationStore SPI — 存储后端抽象                               │  │
+│  │ InMemoryPopulationStore (默认) / Neo4jPopulationStore          │  │
+│  └────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────┘
                                     │
          ┌──────────────────────────┼──────────────────────────┐
          │                          │                          │
 ┌────────▼─────────┐  ┌─────────────▼──────┐  ┌───────────────▼──────┐
-│ onto-evolve-plugins │  onto-evolve-infra   │  onto-evolve-starter   │
-│                    │                      │                        │
-│ LLM Variator      │  RDF 存储适配        │  Spring Boot AutoConfig │
-│ Pareto Selector   │  LLM 客户端适配      │  @ConditionalOnProperty  │
-│ Migrator          │  Metrics 收集        │  默认装配 + SPI 扩展    │
-│ CreditAssigner    │  OntologyValidator   │  YAML 驱动              │
+│ onto-evolve-plugins │  onto-evolve-graph  │  onto-evolve-starter   │
+│                    │   -store             │                        │
+│ LLM Variator      │                      │  Spring Boot AutoConfig │
+│ Pareto Selector   │  Neo4j @Node 实体    │  @ConditionalOnProperty  │
+│ Migrator          │  Neo4j Repository    │  默认装配 + SPI 扩展    │
+│ CreditAssigner    │  ModelMapper         │  YAML 驱动              │
+│                   │  (7 种图节点)        │                         │
 └───────────────────┘  └────────────────────┘  └──────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│                       onto-evolve-infra                              │
+│  LLM 客户端适配 · Metrics 收集 · OntologyValidator                   │
+└──────────────────────────────────────────────────────────────────────┘
 ```
+
+### 持久化策略
+
+OntoEvolve 采用 **双存储设计**：
+
+| 数据类型 | 存储后端 | 说明 |
+|----------|----------|------|
+| **本体实例数据**（概念、种群、方案、进化轨迹、事件-反馈图谱） | Neo4j 图数据库 | 天然图结构，支持复杂关系查询与谱系溯源 |
+| **业务数据**（学生信息等） | 关系型数据库（H2 / PostgreSQL） | 结构化业务数据，通过 JPA 存取 |
+
+通过 `onto.graph.store-type` 配置切换模式：
+- `memory`（默认）— 纯内存运行，无需 Neo4j
+- `neo4j` — 持久化到 Neo4j，重启不丢失
 
 ### 六大插件接口
 
@@ -410,16 +433,14 @@ public interface MetaOptimizer {
 
 ```yaml
 onto:
-  rdf:
-    store-type: tdb2
-    ontology-path: classpath:ontology/education.ttl
-    inference: rdfs
+  graph:
+    store-type: memory          # 存储模式: memory | neo4j
 
   classifier:
-    implementation: com.example.LLMActionClassifier
+    implementation: com.ontoevolve.education.classifier.LLMActionClassifier
     llm:
-      provider: openai
-      model: gpt-4
+      provider: deepseek
+      model: deepseek-v4-flash
     unknown-concept:
       auto-create: false
       approval-queue: jdbc:queue:concept_approval
@@ -427,9 +448,7 @@ onto:
   evolution:
     trigger:
       feedback-count:
-        per-niche: 20       # 中观：累积反馈触发重排
-      schedule:
-        cron: "0 0 2 * * ?" # 宏观：每日完整进化代
+        per-niche: 20           # 中观：累积反馈触发重排
     population:
       default-capacity: 20
     variators:
@@ -441,22 +460,22 @@ onto:
       - type: PERTURB
         weight: 1
     selector:
-      implementation: com.onto.evolve.core.selector.ParetoCrowdingSelector
+      implementation: com.ontoevolve.core.selector.ParetoCrowdingSelector
     migration:
       enabled: true
       compatibility-threshold: 0.85
-      check-interval: "P7D"
 
   meta:
     enabled: true
     parameters: [exploration-rate, population-capacity]
     target-metrics: [average_hypervolume, niche_diversity_index]
 
-  observability:
-    evoltrace-store: db
-    metrics:
-      prometheus:
-        enabled: true
+spring:
+  neo4j:
+    uri: bolt://localhost:7687   # Neo4j 连接（store-type=neo4j 时启用）
+    authentication:
+      username: neo4j
+      password: ${NEO4J_PASSWORD}
 ```
 
 ### 演化架构全景
@@ -477,29 +496,33 @@ onto:
               └──────────────┬───────────────────┘                   │
                              │                                       │
                     ┌────────▼───────────────────────────────────────▼───┐
-                    │                  DAO Layer                        │
-                    │  AssignmentDao  ActionDao  EvaluationDao          │
+                    │            PopulationStore SPI                     │
+                    │  InMemoryPopulationStore / Neo4jPopulationStore   │
+                    │  (热缓存 + Neo4j 写穿)                             │
                     └────────┬───────────────────────────────────────────┘
                              │
                     ┌────────▼──────────┐       ┌───────────────────────┐
-                    │   JenaTdbStore     │◄──────│  EvolutionEngine     │
-                    │   (TDB2 + RDF)    │       │  ┌─────────────────┐  │
-                    │   ontology.ttl    │       │  │ Variator        │  │
-                    └───────────────────┘       │  ├─ LLM Generate   │  │
-                                                │  ├─ Crossover      │  │
-                    ┌────────────────────┐      │  └─ Perturb        │  │
-                    │  MetaOptimizer      │◄─────│  Selector         │  │
-                    │  调整超参数         │      │  ├─ Pareto Sort   │  │
-                    └────────────────────┘      │  ├─ Crowding Dist  │  │
-                                                │  └─ Truncate       │  │
-                    ┌────────────────────┐      │  Migrator         │  │
-                    │  CreditAssignment  │      │  └─ 跨概念迁移     │  │
-                    │  长期信用分配       │      └─────────────────────┘  │
+                    │    Neo4j (图)     │◄──────│  EvolutionEngine     │
+                    │  @Node 实体       │       │  ┌─────────────────┐  │
+                    │  ┌─────────────┐  │       │  │ Variator        │  │
+                    │  │ ActionType  │  │       │  ├─ LLM Generate   │  │
+                    │  │ Intervention│  │       │  ├─ Crossover      │  │
+                    │  │ Assignment  │  │       │  └─ Perturb        │  │
+                    │  │ Execution   │  │       │  Selector          │  │
+                    │  │ Evaluation  │  │       │  ├─ Pareto Sort   │  │
+                    │  │ ActionEvent │  │       │  ├─ Crowding Dist  │  │
+                    │  │ EvolTrace   │  │       │  └─ Truncate       │  │
+                    │  └─────────────┘  │       │  Migrator          │  │
+                    └───────────────────┘       │  └─ 跨概念迁移     │  │
+                                                │  MetaOptimizer     │  │
+                    ┌────────────────────┐      └─────────────────────┘  │
+                    │   CreditAssignment │                               │
+                    │   长期信用分配       │                               │
                     └────────────────────┘                               │
                                                                          │
                     ┌──────────────────────────────────────────────────┐  │
-                    │             OntologyValidator                    │  │
-                    │  TBox 硬约束：disjointness, domain/range, 规则   │◄─┘
+                    │          OntologyValidator                       │  │
+                    │  TBox 硬约束：OWL 类存在性 + 祖先回溯              │◄─┘
                     └──────────────────────────────────────────────────┘
 ```
 
@@ -583,8 +606,11 @@ Phase 4: 元进化与生产打磨 (9 — 12 个月)
 |---|---|---|
 | **语言** | Java 17 | 核心开发语言 |
 | **框架** | Spring Boot 3.2 | 自动装配、配置管理、REST API |
-| **知识表示** | Apache Jena 5.0 (TDB2 + ARQ) | OWL 本体存储、SPARQL 查询与推理 |
-| **LLM 集成** | Spring AI 1.0.3 + OpenAI | LLM 分类、变异生成 |
+| **图数据库** | Neo4j 5 | 本体实例数据（概念、种群、方案、事件-反馈图谱）持久化 |
+| **关系型数据库** | H2 (开发) / PostgreSQL (生产) | 业务数据（学生信息等）|
+| **本体推理** | Apache Jena 5.0 | OWL 本体文件加载、TBox 一致性验证 |
+| **LLM 集成** | Spring AI 1.0.3 + DeepSeek | 事件分类与变异生成（分类、Crossover、Generate） |
+| **前端** | React 18 + TypeScript + Vite | 管理界面：事件处理、种群监控、进化轨迹 |
 | **可观测性** | Micrometer 1.12 + Prometheus | 指标收集与监控 |
 | **构建工具** | Maven (多模块) | 模块化构建管理 |
 
@@ -592,11 +618,12 @@ Phase 4: 元进化与生产打磨 (9 — 12 个月)
 
 | 模块 | 职责 |
 |---|---|
-| **onto-evolve-core** | 核心抽象：元本体模型、进化循环引擎接口（Variator/Selector/Migrator/MetaOptimizer） |
-| **onto-evolve-plugins** | 插件实现：LLM Variator、Pareto Selector、CreditAssigner 等 |
-| **onto-evolve-infra** | 基础设施：RDF 存储适配、LLM 客户端适配、Metrics 收集、OntologyValidator |
+| **onto-evolve-core** | 核心抽象：元本体模型、进化循环引擎接口（Variator/Selector/Migrator/MetaOptimizer）、**PopulationStore SPI**（内存/Neo4j 存储后端抽象） |
+| **onto-evolve-plugins** | 插件实现：LLM Variator、Pareto Selector、CreditAssigner、ParetoUCBMatcher 等 |
+| **onto-evolve-infra** | 基础设施：LLM 客户端适配、Metrics 收集、OntologyValidator |
+| **onto-evolve-graph-store** | Neo4j 图存储：7 种 @Node 实体、Neo4j Repository、ModelMapper、Neo4jPopulationStore（热缓存+写穿持久化） |
 | **onto-evolve-starter** | Spring Boot Starter：自动装配、@ConditionalOnProperty、YAML 配置驱动 |
-| **onto-domain-education** | 教育领域适配示例：学生行为分类、干预措施决策、效果评估本体 |
+| **onto-domain-education** | 教育领域适配示例：学生行为分类、干预措施决策、效果评估本体、REST API 与 React 前端 |
 
 ---
 

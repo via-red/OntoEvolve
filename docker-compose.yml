@@ -1,0 +1,80 @@
+# docker-compose.yml
+#
+# Prerequisites:
+#   mvn package -DskipTests          # build backend JAR
+#   cd frontend && npm ci && npm run build && cd ..  # build frontend
+#
+# Quick dev (H2+memory, no external deps):
+#   docker compose up
+#
+# Full stack (Neo4j + PostgreSQL):
+#   docker compose --profile full up
+#
+# Required: create .env with DEEPSEEK_API_KEY (see .env.example)
+#
+services:
+  backend:
+    build: .
+    ports:
+      - "8088:8088"
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      SPRING_AI_OPENAI_API_KEY: ${DEEPSEEK_API_KEY}
+      SPRING_AI_OPENAI_BASE_URL: https://api.deepseek.com
+      SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL: deepseek-v4-flash
+      # Full-stack: set these in .env when using --profile full
+      # ONTO_GRAPH_STORE_TYPE=neo4j
+      # SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/ontoevolve
+      # SPRING_DATASOURCE_USERNAME=ontoevolve
+      # SPRING_DATASOURCE_PASSWORD=ontoevolve123
+      # SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      # SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+      # SPRING_NEO4J_URI=bolt://neo4j:7687
+      # SPRING_NEO4J_AUTHENTICATION_USERNAME=neo4j
+      # SPRING_NEO4J_AUTHENTICATION_PASSWORD=password
+
+  frontend:
+    build: frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  # === Full-stack mode only (add --profile full) ===
+  neo4j:
+    profiles: ["full"]
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-password}
+      NEO4J_dbms_memory_heap_max__size: 1G
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    volumes:
+      - neodata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-password} 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    profiles: ["full"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ontoevolve}
+      POSTGRES_USER: ${POSTGRES_USER:-ontoevolve}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ontoevolve123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ontoevolve}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  neodata:
+  pgdata:

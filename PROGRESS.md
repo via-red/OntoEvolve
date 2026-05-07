@@ -53,7 +53,14 @@
 | OntoEvolveConfig | ✅ 完成 | 全量配置模型，映射 YAML |
 | OntologyValidator 默认实现 | ✅ 完成 | 默认始终返回 true，由领域项目覆盖 |
 
-### 1.6 单元测试
+### 1.6 PopulationStore SPI
+
+| 类型 | 状态 | 说明 |
+|------|------|------|
+| PopulationStore 接口 | ✅ 完成 | 种群/反馈/轨迹读写抽象，解耦 EvolutionEngine 与存储后端 |
+| InMemoryPopulationStore | ✅ 完成 | 默认实现，ConcurrentHashMap + synchronizedList，EvolutionEngine 原内存逻辑提取 |
+
+### 1.7 单元测试
 
 | 测试类 | 状态 | 说明 |
 |--------|------|------|
@@ -119,7 +126,6 @@
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | LLMClient | ✅ 完成 | Spring AI ChatClient 封装，支持系统提示覆盖 |
-| OpenAIClient | ✅ 完成 | 已标记 @Deprecated，由 Spring AI 自动配置取代 |
 
 ### 3.2 指标
 
@@ -128,25 +134,46 @@
 | MetricsCollector | ✅ 完成 | 种群大小/反馈数/LLM调用/进化代际/超体积/Shannon多样性 |
 | **MetricsCollector 测试** | ⏳ 待完成 | |
 
-### 3.3 存储
+---
 
-| 模块 | 状态 | 说明 |
+## 四、图存储层 (onto-evolve-graph-store)
+
+### 4.1 Neo4j @Node 实体
+
+| 节点 | 状态 | 关键关系 |
+|------|------|----------|
+| ActionTypeNode | ✅ 完成 | `(:Parent)-[:SUBSUMES]->(:Child)` 本体层次 |
+| InterventionNode | ✅ 完成 | 干预措施节点，`HAS_PARENT` 谱系引用 |
+| AssignmentNode | ✅ 完成 | `FOR_CONCEPT→ActionType` · `DECIDES→Intervention` · `HAS_PARENT→Assignment` |
+| ExecutionNode | ✅ 完成 | `EXECUTES→Assignment`，关联执行者与目标 |
+| EvaluationNode | ✅ 完成 | `EVALUATES→Execution`，三维评分 [effectiveness, cost, satisfaction] |
+| ActionEventNode | ✅ 完成 | `CLASSIFIED_AS→ActionType`，事件源头 |
+| EvolTraceNode | ✅ 完成 | `PRODUCED→Assignment` · `PRODUCED_DECISION→Intervention` · `DERIVED_FROM→Assignments` |
+
+### 4.2 Repository 层
+
+| 仓库 | 状态 | 说明 |
 |------|------|------|
-| OntologyStore 接口 | ✅ 完成 | 概念/方案/反馈/SPARQL 全操作定义 |
-| Tdb2OntologyStore | ✅ 完成 | SPARQL 查询已实现，本体文件加载已激活（`classpath:` 解析），save 方法为空存根 |
-| **Tdb2OntologyStore 测试** | ⏳ 待完成 | 依赖 TDB2 环境 |
-| **SPARQL 通用查询** | ⏳ 待完成 | `query()` 抛出 UnsupportedOperationException |
+| 7 个 Neo4j Repository | ✅ 完成 | Spring Data Neo4j `@Query` Cypher 查询 |
+
+### 4.3 核心组件
+
+| 组件 | 状态 | 说明 |
+|------|------|------|
+| ModelMapper | ✅ 完成 | 核心 POJO ↔ Neo4j @Node 双向转换 |
+| Neo4jPopulationStore | ✅ 完成 | 实现 PopulationStore SPI：ConcurrentHashMap 热缓存 + Neo4j 写穿持久化 |
+| GraphStoreAutoConfiguration | ✅ 完成 | `@ConditionalOnProperty` 控制，仅 store-type=neo4j 时激活 |
 
 ---
 
-## 四、Spring Boot Starter (onto-evolve-starter)
+## 五、Spring Boot Starter (onto-evolve-starter)
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| OntoEvolveAutoConfiguration | ✅ 完成 | 全 Bean 条件装配，@ConditionalOnMissingBean 支持覆盖，新增 OntologyStore 条件装配 |
+| OntoEvolveAutoConfiguration | ✅ 完成 | 全 Bean 条件装配，@ConditionalOnMissingBean 支持覆盖，PopulationStore 双模式注入 |
 | OntoEvolveApplication | ✅ 完成 | 启动入口 |
-| application-ontoevolve.yml | ✅ 完成 | 默认配置，含完整注释 |
-| **Docker 容器化** | ⏳ 待完成 | |
+| application-ontoevolve.yml | ✅ 完成 | 默认配置，含完整注释，双存储模式配置 |
+| **Docker 容器化** | ✅ 完成 | docker-compose.yml 含 app + Neo4j 服务 |
 | **CI/CD 配置** | ⏳ 待完成 | |
 
 ---
@@ -171,38 +198,43 @@
 | InterventionService | ✅ 完成 | 分类→匹配→进化 全链路编排，子概念无匹配时递归回退父概念 |
 | EducationOntologyValidator | ✅ 完成 | 基于 Jena Model 的本体验证器，加载 education.ttl，检查 Concept IRI 的 owl:Class 存在性（含祖先回溯） |
 
-### 5.3 API 与前端
+### 6.3 API 与前端
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| EventController (REST API) | ✅ 完成 | 6 端点：事件处理/评价提交/种群查看/触发进化/指标/谱系 |
-| Dashboard HTML | ✅ 完成 | 4 面板仪表盘：概览/种群/谱系/调试 |
+| EventController (REST API) | ✅ 完成 | 6 端点：事件处理/评价提交/种群查看/触发进化/指标/本体。支持双存储模式，Neo4j 可用时自动持久化 |
+| React 前端 | ✅ 完成 | 3 页面：事件处理（模板+提交+结果流水线）、进化引擎（种群视图+进化轨迹）、学生列表。TypeScript + Vite |
 
-### 5.4 资源文件
+### 6.4 资源文件
 
 | 资源 | 状态 | 说明 |
 |------|------|------|
-| application.yml | ✅ 完成 | DeepSeek 集成，教育领域参数覆写 |
+| application.yml | ✅ 完成 | DeepSeek 集成，教育领域参数覆写，双存储配置 |
 | classifier.st | ✅ 完成 | 分类 Prompt 模板 |
 | variator_crossover.st | ✅ 完成 | 交叉 Prompt 模板 |
 | variator_generate.st | ✅ 完成 | 生成 Prompt 模板 |
 
-### 5.5 待办
+### 6.5 Docker 部署
+
+| 组件 | 状态 | 说明 |
+|------|------|------|
+| docker-compose.yml | ✅ 完成 | 含 Neo4j 5 服务（bolt:7687, http:7474）+ 健康检查 |
+| Neo4j 环境配置 | ✅ 完成 | SPRING_NEO4J_* 环境变量，ONTO_GRAPH_STORE_TYPE=neo4j |
+
+### 6.6 待办
 
 | 事项 | 状态 | 说明 |
 |------|------|------|
 | **领域测试** | ⏳ 待完成 | 无任何领域层测试 |
-| **Execution 真实创建** | ⏳ 待完成 | `submitEvaluation()` 目前传 null |
 
 ---
 
-## 六、待开发的高级功能
+## 七、待开发的高级功能
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
 | Prometheus 监控集成 | ⏳ 待完成 | Micrometer 依赖已引入，配置未启用 |
 | 迁移时间窗口检查 | ⏳ 待完成 | `checkAndMigrate` 未实现 `checkInterval` 逻辑 |
-| 概念谱系递归查询 | ⏳ 待完成 | TDB2 的 `findConcept` 未递归解析父概念 |
 
 ---
 
@@ -210,10 +242,11 @@
 
 | 层级 | 总项 | 已完成 | 部分完成 | 待完成 | 完成率 |
 |------|------|--------|----------|--------|--------|
-| 核心框架层 | 14 | 14 | 0 | 0 | 100% |
+| 核心框架层 | 16 | 16 | 0 | 0 | 100% |
 | 插件层 | 16 | 11 | 0 | 5 | 69% |
-| 基础设施层 | 8 | 6 | 0 | 2 | 75% |
-| Spring Boot Starter | 5 | 3 | 0 | 2 | 60% |
-| 教育领域示例 | 12 | 10 | 0 | 2 | 83% |
-| 高级功能 | 3 | 0 | 0 | 3 | 0% |
-| **合计** | **58** | **44** | **0** | **14** | **76%** |
+| 基础设施层 | 3 | 2 | 0 | 1 | 67% |
+| 图存储层 | 11 | 11 | 0 | 0 | 100% |
+| Spring Boot Starter | 5 | 4 | 0 | 1 | 80% |
+| 教育领域示例 | 17 | 16 | 0 | 1 | 94% |
+| 高级功能 | 2 | 0 | 0 | 2 | 0% |
+| **合计** | **70** | **60** | **0** | **10** | **86%** |

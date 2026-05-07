@@ -18,6 +18,7 @@
         <module>onto-evolve-infra</module>
         <module>onto-evolve-starter</module>
         <module>onto-domain-education</module>
+        <module>onto-evolve-graph-store</module>
     </modules>
 
     <properties>
@@ -52,6 +53,11 @@
             <dependency>
                 <groupId>com.ontoevolve</groupId>
                 <artifactId>onto-evolve-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ontoevolve</groupId>
+                <artifactId>onto-evolve-graph-store</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -104,4 +110,16 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 </project>

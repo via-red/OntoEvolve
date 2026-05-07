@@ -13,6 +13,7 @@ import org.springframework.context.annotation.ComponentScan;
 @ComponentScan(basePackages = {
         "com.ontoevolve.starter",
         "com.ontoevolve.infra",
+        "com.ontoevolve.graphstore",
         "com.ontoevolve.domain.education"
 })
 public class EducationApplication {
