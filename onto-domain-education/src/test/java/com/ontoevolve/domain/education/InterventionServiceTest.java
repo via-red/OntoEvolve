@@ -73,7 +73,7 @@ class InterventionServiceTest {
             ActionType behavioral = ontologyService.findActionType(NS + "Behavioral")
                     .orElseThrow(() -> new RuntimeException("No Behavioral type"));
             return behavioral;
-        }));
+        }), null, null);
     }
 
     @Test

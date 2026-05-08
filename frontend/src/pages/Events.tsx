@@ -29,6 +29,11 @@ export default function Events() {
   const [evalSubmitting, setEvalSubmitting] = useState(false);
   const [evalDone, setEvalDone] = useState(false);
 
+  // Candidate solutions selection
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [selectedIri, setSelectedIri] = useState('');
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+
   useEffect(() => {
     loadEvents();
   }, []);
@@ -46,9 +51,25 @@ export default function Events() {
     setResult(null);
     setError('');
     setEvalDone(false);
+    setCandidates([]);
+    setSelectedIri('');
     try {
       const res = await api.processEvent(form);
       setResult(res as ActionEvent);
+      // Default to the auto-matched intervention
+      setSelectedIri(res.interventionIri || '');
+      // Use candidates from the response (backend now returns them directly)
+      if (res.candidates && res.candidates.length > 0) {
+        setCandidates(res.candidates);
+      } else if (res.classifiedConcept) {
+        // Fallback: fetch via API for backward compatibility
+        setCandidatesLoading(true);
+        try {
+          const pop = await api.getPopulation(res.classifiedConcept);
+          setCandidates(pop.members || []);
+        } catch {}
+        setCandidatesLoading(false);
+      }
       await loadEvents();
     } catch (e: any) {
       setError(e.message || '事件处理失败');
@@ -57,11 +78,11 @@ export default function Events() {
   };
 
   const handleEvaluation = async () => {
-    if (!result) return;
+    if (!result || !selectedIri) return;
     setEvalSubmitting(true);
     try {
       await api.submitEvaluation({
-        interventionIri: result.interventionIri || result.matchedIntervention,
+        interventionIri: selectedIri,
         studentId: result.studentId,
         ...evalForm,
       });
@@ -88,7 +109,7 @@ export default function Events() {
     <div>
       <div className="page-header">
         <h2>⚡ 事件处理</h2>
-        <p>提交行为事件 → LLM 分类 → 方案匹配 → 反馈评价</p>
+        <p>提交行为事件 → LLM 分类 → 选择方案 → 反馈评价</p>
       </div>
 
       <div className="grid grid-2">
@@ -176,12 +197,74 @@ export default function Events() {
                 </div>
                 <div className="pipeline-arrow">→</div>
                 <div className="pipeline-step active" style={{ flex: 2, padding: '10px 12px' }}>
-                  <div className="step-label">💊 方案</div>
+                  <div className="step-label">💊 推荐方案</div>
                   <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
                     {result.matchedIntervention || result.suggestion || '—'}
                   </div>
                 </div>
               </div>
+
+              {/* Solution Selector */}
+              {candidates.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 16, marginTop: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>💊 选择实施方案</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                    系统推荐了最佳方案，您也可以从种群中选择其他方案
+                  </div>
+                  {candidatesLoading ? (
+                    <div className="loading" style={{ padding: 12 }}>加载候选方案...</div>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedIri}
+                        onChange={e => setSelectedIri(e.target.value)}
+                        style={{
+                          width: '100%', padding: '8px 12px', borderRadius: 6,
+                          border: '1px solid var(--border)', background: 'var(--bg-card)',
+                          color: 'var(--text)', fontSize: 13, marginBottom: 12,
+                        }}>
+                        {candidates.map((c, i) => (
+                          <option key={i} value={c.decisionIri}>
+                            {c.name} — 评分[{c.scoreVector?.map((s: number) => s.toFixed(2)).join(',') || '—'}] 尝试{c.trials}次
+                          </option>
+                        ))}
+                      </select>
+                      {/* Selected solution detail */}
+                      {(() => {
+                        const sel = candidates.find(c => c.decisionIri === selectedIri);
+                        if (!sel) return null;
+                        return (
+                          <div style={{
+                            background: 'var(--bg-card-hover)', borderRadius: 6, padding: 12, marginBottom: 12,
+                            border: '1px solid var(--border-light)',
+                          }}>
+                            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
+                              <div><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>代数 </span><span style={{ fontSize: 13, fontWeight: 500 }}>G{sel.generation}</span></div>
+                              <div><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>状态 </span><span className="badge" style={{ fontSize: 11 }}>{sel.status}</span></div>
+                              <div><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>尝试 </span><span style={{ fontSize: 13, fontWeight: 500 }}>{sel.trials} 次</span></div>
+                            </div>
+                            {sel.description && (
+                              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                                {sel.description}
+                              </div>
+                            )}
+                            {sel.steps && sel.steps.length > 0 && (
+                              <div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>实施步骤：</div>
+                                <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                  {sel.steps.map((s: string, i: number) => (
+                                    <li key={i} style={{ marginBottom: 2 }}>{s}</li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Evaluation Form */}
               {!evalDone ? (

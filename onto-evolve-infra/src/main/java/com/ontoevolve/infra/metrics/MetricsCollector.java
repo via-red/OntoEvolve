@@ -1,7 +1,6 @@
 package com.ontoevolve.infra.metrics;
 
 import com.ontoevolve.core.kernel.DecisionPopulation;
-import com.ontoevolve.core.kernel.EvolTrace;
 import com.ontoevolve.core.spi.GlobalMetrics;
 
 import java.util.*;
@@ -11,9 +10,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 度量收集器 — 收集系统运行指标，供元优化器和监控使用。
- * <p>
- * 记录种群大小、反馈数、LLM 调用次数、进化代际等关键指标。
- * 可与 Micrometer 集成暴露 Prometheus 端点。
  */
 public class MetricsCollector {
     private final Map<String, AtomicInteger> populationSizes = new ConcurrentHashMap<>();
@@ -22,6 +18,12 @@ public class MetricsCollector {
     private final AtomicInteger llmCalls = new AtomicInteger(0);
     private final AtomicInteger evolutionRuns = new AtomicInteger(0);
     private final List<Double> hypervolumeHistory = Collections.synchronizedList(new ArrayList<>());
+
+    // LLM token and latency tracking
+    private final AtomicLong totalPromptTokens = new AtomicLong(0);
+    private final AtomicLong totalCompletionTokens = new AtomicLong(0);
+    private final AtomicLong totalLatencyNs = new AtomicLong(0);
+    private final AtomicInteger llmErrorCount = new AtomicInteger(0);
 
     public void recordPopulationSize(String conceptIri, int size) {
         populationSizes.computeIfAbsent(conceptIri, k -> new AtomicInteger()).set(size);
@@ -37,6 +39,17 @@ public class MetricsCollector {
 
     public void recordLlmCall() {
         llmCalls.incrementAndGet();
+    }
+
+    public void recordLlmCall(int promptTokens, int completionTokens, long latencyMs) {
+        llmCalls.incrementAndGet();
+        totalPromptTokens.addAndGet(promptTokens);
+        totalCompletionTokens.addAndGet(completionTokens);
+        totalLatencyNs.addAndGet(latencyMs * 1_000_000);
+    }
+
+    public void recordLlmError() {
+        llmErrorCount.incrementAndGet();
     }
 
     public void recordEvolutionRun() {
@@ -61,6 +74,14 @@ public class MetricsCollector {
     public long getTotalFeedbacks() { return totalFeedbacks.get(); }
     public int getLlmCalls() { return llmCalls.get(); }
     public int getEvolutionRuns() { return evolutionRuns.get(); }
+    public long getTotalPromptTokens() { return totalPromptTokens.get(); }
+    public long getTotalCompletionTokens() { return totalCompletionTokens.get(); }
+    public int getLlmErrorCount() { return llmErrorCount.get(); }
+
+    public long getAverageLatencyMs() {
+        int calls = llmCalls.get();
+        return calls > 0 ? totalLatencyNs.get() / calls / 1_000_000 : 0;
+    }
 
     public double getAverageHypervolume() {
         return hypervolumeHistory.isEmpty() ? 0.0 :
@@ -86,11 +107,15 @@ public class MetricsCollector {
         Map<String, Double> extra = new HashMap<>();
         extra.put("evolutionRuns", (double) getEvolutionRuns());
         extra.put("llmCalls", (double) getLlmCalls());
+        extra.put("totalPromptTokens", (double) getTotalPromptTokens());
+        extra.put("totalCompletionTokens", (double) getTotalCompletionTokens());
+        extra.put("averageLatencyMs", (double) getAverageLatencyMs());
+        extra.put("llmErrors", (double) getLlmErrorCount());
 
         return new GlobalMetrics(
                 getAverageHypervolume(),
                 getNicheDiversityIndex(populations),
-                0.0, // deprecationRate
+                0.0,
                 getLlmCalls(),
                 populations.size(),
                 getTotalFeedbacks(),

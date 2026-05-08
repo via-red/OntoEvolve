@@ -1,51 +1,54 @@
 package com.ontoevolve.plugins.variator;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ontoevolve.core.model.Assignment;
 import com.ontoevolve.core.model.Decision;
 import com.ontoevolve.core.spi.Variator;
 import com.ontoevolve.core.spi.VariationContext;
-import org.springframework.ai.chat.client.ChatClient;
+import com.ontoevolve.infra.llm.LLMClient;
+import com.ontoevolve.infra.llm.LLMResponse;
+import com.ontoevolve.infra.llm.PromptTemplateService;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * LLM 生成变异算子 — 利用 Spring AI ChatClient 生成全新方案。
+ * LLM 生成变异算子 — 利用 LLM 生成全新方案。
  * <p>
- * Prompt 会注入当前生态位的成功方案特征摘要，
- * 使变异具有偏向性而非完全随机。
- * 支持通过配置切换不同的 AI 模型（OpenAI / Claude / Ollama 等）。
+ * 使用 PromptTemplateService 加载外部 prompt 模板，
+ * 优先以 JSON 格式解析 LLM 输出，失败时回退 regex 解析。
  */
 public class LLMGenerateVariator implements Variator<Decision, Assignment> {
 
-    private final ChatClient chatClient;
+    private final LLMClient llmClient;
+    private final PromptTemplateService promptService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public LLMGenerateVariator(ChatClient.Builder chatClientBuilder) {
-        this.chatClient = chatClientBuilder
-                .defaultSystem("你是一个决策方案设计师，擅长根据已有成功方案的特征生成创新的备选方案。")
-                .build();
+    public LLMGenerateVariator(LLMClient llmClient, PromptTemplateService promptService) {
+        this.llmClient = llmClient;
+        this.promptService = promptService;
     }
 
     @Override
     public List<Assignment> generate(VariationContext ctx) {
         List<Assignment> newborns = new ArrayList<>();
         String nicheSummary = summarizeNiche(ctx);
-        String prompt = buildUserPrompt(ctx.getConcept().getLabel(), nicheSummary);
 
-        String llmOutput = chatClient.prompt()
-                .user(prompt)
-                .call()
-                .content();
+        String prompt = promptService.render("variator_generate", Map.of(
+                "conceptLabel", ctx.getConcept().getLabel(),
+                "nicheSummary", nicheSummary
+        ));
 
-        Decision decision = parseDecision(llmOutput, ctx);
+        LLMResponse response = llmClient.generate(prompt);
+        if (response.content() == null || response.content().isBlank()) return newborns;
+
+        Decision decision = parseDecision(response.content(), ctx);
         if (decision != null) {
             Assignment assignment = new Assignment(
                     "gen:" + UUID.randomUUID(),
                     decision,
                     ctx.getConcept(),
-                    3 // 默认三维反馈
+                    3
             );
             newborns.add(assignment);
         }
@@ -62,29 +65,41 @@ public class LLMGenerateVariator implements Variator<Decision, Assignment> {
                 .limit(5)
                 .map(a -> String.format("[%s] score=%s trials=%d",
                         a.getDecision().getName(),
-                        java.util.Arrays.toString(a.getScoreVector()),
+                        Arrays.toString(a.getScoreVector()),
                         a.getTrials()))
                 .collect(Collectors.joining("\n"));
     }
 
-    private String buildUserPrompt(String conceptLabel, String nicheSummary) {
-        return String.format("""
-                当前生态位: %s。
-
-                已有成功方案概览:
-                %s
-
-                请生成一个新的干预方案，要求:
-                1. 名称 — 简练概括方案核心
-                2. 描述 — 一句话说明适用场景和预期效果
-                3. 执行步骤 — 3-5 步，清晰可操作
-
-                要求借鉴已有方案的优势，但提供不同的解决思路。
-                """, conceptLabel, nicheSummary);
-    }
-
     private Decision parseDecision(String llmOutput, VariationContext ctx) {
         String iri = "decision:" + UUID.randomUUID();
+
+        // 优先 JSON 解析
+        try {
+            // 提取 JSON 块（可能被 markdown ``` 包围）
+            String json = llmOutput;
+            if (json.contains("```")) {
+                int start = json.indexOf('{');
+                int end = json.lastIndexOf('}');
+                if (start >= 0 && end > start) json = json.substring(start, end + 1);
+            }
+            Map<?, ?> parsed = objectMapper.readValue(json, Map.class);
+            String name = Objects.toString(parsed.get("name"), null);
+            String desc = Objects.toString(parsed.get("description"), null);
+            List<?> stepsRaw = (List<?>) parsed.get("steps");
+            List<String> steps = stepsRaw != null
+                    ? stepsRaw.stream().map(Object::toString).toList()
+                    : List.of("执行方案");
+
+            Decision d = new Decision(iri, name != null ? name : "LLM方案", desc, steps);
+            if (!ctx.getPopulation().isEmpty()) {
+                d.addParent(ctx.getPopulation().get(0).getDecision());
+            }
+            return d;
+        } catch (Exception ignored) {
+            // JSON 解析失败，回退 regex
+        }
+
+        // 回退 regex 解析
         String name = extractName(llmOutput);
         String desc = extractDescription(llmOutput);
         List<String> steps = extractSteps(llmOutput);

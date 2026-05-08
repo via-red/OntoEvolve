@@ -5,6 +5,7 @@ import com.ontoevolve.core.kernel.EvolutionEngine;
 import com.ontoevolve.core.model.Assignment;
 import com.ontoevolve.core.model.Execution;
 import com.ontoevolve.core.model.Feedback;
+import com.ontoevolve.core.validation.OntologyValidator;
 import com.ontoevolve.graphstore.node.ActionEventNode;
 import com.ontoevolve.graphstore.node.ActionTypeNode;
 import com.ontoevolve.graphstore.node.AssignmentNode;
@@ -36,6 +37,7 @@ public class EventController {
     private final InterventionService interventionService;
     private final MetricsCollector metrics;
     private final StudentRepository studentRepo;
+    private final OntologyValidator ontologyValidator;
 
     // Optional Neo4j repositories — null when onto.graph.store-type=memory
     private final ActionEventRepository actionEventNeoRepo;
@@ -52,6 +54,7 @@ public class EventController {
     public EventController(InterventionService interventionService,
                            MetricsCollector metrics,
                            StudentRepository studentRepo,
+                           OntologyValidator ontologyValidator,
                            ObjectProvider<ActionEventRepository> actionEventNeoRepo,
                            ObjectProvider<ActionTypeRepository> actionTypeNeoRepo,
                            ObjectProvider<EvaluationRepository> evaluationNeoRepo,
@@ -60,6 +63,7 @@ public class EventController {
         this.interventionService = interventionService;
         this.metrics = metrics;
         this.studentRepo = studentRepo;
+        this.ontologyValidator = ontologyValidator;
         this.actionEventNeoRepo = actionEventNeoRepo.getIfAvailable();
         this.actionTypeNeoRepo = actionTypeNeoRepo.getIfAvailable();
         this.evaluationNeoRepo = evaluationNeoRepo.getIfAvailable();
@@ -108,6 +112,29 @@ public class EventController {
         // Persist to Neo4j when available
         if (actionEventNeoRepo != null && suggestion != null) {
             persistEventWithRelation(event, suggestion);
+        }
+
+        // Add candidate solutions from the population so the user can choose
+        if (!conceptIri.isEmpty()) {
+            DecisionPopulation pop = interventionService.getEvolutionEngine()
+                    .getPopulations().get(conceptIri);
+            if (pop != null) {
+                List<Map<String, Object>> candidates = pop.getAllMembers().stream()
+                        .map(a -> {
+                            Map<String, Object> m = new HashMap<>();
+                            m.put("iri", a.getIri());
+                            m.put("decisionIri", a.getDecision().getIri());
+                            m.put("name", a.getDecision().getName());
+                            m.put("description", a.getDecision().getDescription());
+                            m.put("steps", a.getDecision().getSteps());
+                            m.put("scoreVector", a.getScoreVector());
+                            m.put("trials", a.getTrials());
+                            m.put("generation", a.getGeneration());
+                            m.put("status", a.getStatus().name());
+                            return m;
+                        }).toList();
+                eventRecord.put("candidates", candidates);
+            }
         }
 
         // Always store in memory for history display
@@ -208,6 +235,7 @@ public class EventController {
             m.put("trials", a.getTrials());
             m.put("generation", a.getGeneration());
             m.put("status", a.getStatus().name());
+            m.put("validationStatus", ontologyValidator.validate(a) ? "valid" : "invalid");
             if (a.getParents() != null && !a.getParents().isEmpty()) {
                 m.put("parentDecisionIris", a.getParents().stream()
                         .map(p -> p.getDecision().getIri()).toList());
@@ -246,6 +274,17 @@ public class EventController {
         response.put("totalEvents", eventCount);
         response.put("totalStudents", studentRepo.count());
         response.put("totalInterventions", interventionCount);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/metrics/llm")
+    public ResponseEntity<Map<String, Object>> getLlmMetrics() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("totalCalls", metrics.getLlmCalls());
+        response.put("totalPromptTokens", metrics.getTotalPromptTokens());
+        response.put("totalCompletionTokens", metrics.getTotalCompletionTokens());
+        response.put("averageLatencyMs", metrics.getAverageLatencyMs());
+        response.put("errorCount", metrics.getLlmErrorCount());
         return ResponseEntity.ok(response);
     }
 

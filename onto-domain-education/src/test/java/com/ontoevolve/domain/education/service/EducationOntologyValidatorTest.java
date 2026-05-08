@@ -96,7 +96,7 @@ class EducationOntologyValidatorTest {
         // Due to how assignment stores concept, use reflection-like approach
         // Just test the validator returns true for null IRI
         Assignment simple = createAssignment(null, "Test", null, null);
-        assertTrue(validator.validate(simple), "Null IRI should pass through");
+        assertFalse(validator.validate(simple), "Null IRI should be rejected");
     }
 
     @Test

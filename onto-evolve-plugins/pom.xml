@@ -15,10 +15,19 @@
             <groupId>com.ontoevolve</groupId>
             <artifactId>onto-evolve-core</artifactId>
         </dependency>
-        <!-- Variator 通过 Spring AI ChatClient 调用 LLM -->
+        <dependency>
+            <groupId>com.ontoevolve</groupId>
+            <artifactId>onto-evolve-infra</artifactId>
+        </dependency>
+        <!-- Variator 通过 LLMClient 调用 LLM -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-client-chat</artifactId>
+        </dependency>
+        <!-- JSON parsing for structured LLM output -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
         <!-- Test -->
         <dependency>

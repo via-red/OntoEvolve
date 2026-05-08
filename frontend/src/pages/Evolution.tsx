@@ -342,6 +342,15 @@ export default function Evolution() {
                                     <span className={`badge ${statusClass(m.status)}`} style={{ fontSize: 11 }}>
                                       {statusLabel(m.status)}
                                     </span>
+                                    {m.validationStatus && (
+                                      <span className="badge" style={{
+                                        fontSize: 11, marginLeft: 4,
+                                        background: m.validationStatus === 'valid' ? 'var(--success)' : '#f59e0b',
+                                        color: '#fff',
+                                      }}>
+                                        {m.validationStatus === 'valid' ? '✓' : '?'}
+                                      </span>
+                                    )}
                                   </td>
                                   <td>
                                     <button className="btn btn-sm"

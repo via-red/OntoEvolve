@@ -30,6 +30,8 @@ export interface ActionEvent {
   suggestion?: string;
   /** Error message on failure */
   error?: string;
+  /** Candidate solutions from the population for user selection */
+  candidates?: AssignmentView[];
 }
 
 export interface OntologyNode {
@@ -74,8 +76,17 @@ export interface AssignmentView {
   trials: number;
   generation: number;
   status: string;
+  validationStatus?: string;
   parentDecisionIris: string[];
   parentNames: string[];
+}
+
+export interface LlmMetrics {
+  totalCalls: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  averageLatencyMs: number;
+  errorCount: number;
 }
 
 export interface EvolTrace {

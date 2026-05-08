@@ -1,7 +1,7 @@
 # OntoEvolve 开发进度
 
-> 项目版本: 0.1.0-SNAPSHOT
-> 最后更新: 2026-05-08
+> 项目版本: 0.2.0-SNAPSHOT
+> 最后更新: 2026-05-08 (架构优化版)
 
 ---
 
@@ -30,6 +30,8 @@
 | Matcher | ✅ 完成 | 从种群匹配最优方案 |
 | MetaOptimizer | ✅ 完成 | 进化超参数自适应 |
 | OntologyValidator | ✅ 完成 | 语义安全验证闸 |
+| Environment | ✅ 完成 | 评估环境抽象，支持人工/模拟评估 |
+| EnvironmentConfig | ✅ 完成 | 环境配置（模拟模式/噪声/偏差） |
 
 ### 1.3 辅助 SPI 类型
 
@@ -119,6 +121,13 @@
 | OntologyCausalCreditAssigner | ✅ 完成 | 时间衰减 + 因果距离 |
 | UniformCreditAssigner 测试 | ✅ 完成 | 无历史/分布/最大回溯 |
 
+### 2.7 评估环境
+
+| 实现 | 状态 | 说明 |
+|------|------|------|
+| Environment SPI | ✅ 完成 | 评估执行效果的抽象接口 |
+| SimulatedEvaluationEnvironment | ✅ 完成 | 启发式 + 高斯噪声模拟评分，支持离线测试 |
+
 ---
 
 ## 三、基础设施层 (onto-evolve-infra)
@@ -127,7 +136,11 @@
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| LLMClient | ✅ 完成 | Spring AI ChatClient 封装，支持系统提示覆盖 |
+| LLMClient | ✅ 完成 | @Retryable 重试、token 统计、延迟追踪、并发 batch、fallback |
+| LLMResponse | ✅ 完成 | 完整 LLM 响应（content + token + finishReason + latencyMs） |
+| PromptTemplateService | ✅ 完成 | .st 模板加载与渲染，解耦 prompt 与代码 |
+| OpenAiChatConfig | ✅ 完成 | Spring AI OpenAI 配置 |
+| **JenaOntologyValidator** | ✅ 完成 | Jena OntModel 驱动的本体验证器：类存在性、disjointness、一致性检查 |
 
 ### 3.2 指标
 
@@ -196,9 +209,9 @@
 | 服务 | 状态 | 说明 |
 |------|------|------|
 | EducationOntologyService | ✅ 完成 | 6 种内置行为类型，内存驱动，支持动态注册 |
-| LLMActionClassifier | ✅ 完成 | 实现 Classifier SPI 接口，LLM 语义分类，含回退关键词注册机制 |
-| InterventionService | ✅ 完成 | 分类→匹配→进化 全链路编排，子概念无匹配时递归回退父概念 |
-| EducationOntologyValidator | ✅ 完成 | 基于 Jena Model 的本体验证器，加载 education.ttl，检查 Concept IRI 的 owl:Class 存在性（含祖先回溯） |
+| LLMActionClassifier | ✅ 完成 | 实现 Classifier SPI 接口，使用 PromptTemplateService 加载 classifier.st，含回退机制 |
+| InterventionService | ✅ 完成 | 全链路编排 + Environment 自动评估 + CreditAssigner 延迟信用分配 |
+| EducationOntologyValidator | ✅ 完成 | 加载 education.ttl + 委托 JenaOntologyValidator 进行推理层检查（disjointness/一致性） |
 
 ### 6.3 API 与前端
 
@@ -245,11 +258,11 @@
 
 | 层级 | 总项 | 已完成 | 部分完成 | 待完成 | 完成率 |
 |------|------|--------|----------|--------|--------|
-| 核心框架层 | 16 | 16 | 0 | 0 | 100% |
-| 插件层 | 16 | 14 | 0 | 2 | 88% |
-| 基础设施层 | 3 | 3 | 0 | 0 | 100% |
+| 核心框架层 | 18 | 18 | 0 | 0 | 100% |
+| 插件层 | 18 | 16 | 0 | 2 | 89% |
+| 基础设施层 | 7 | 7 | 0 | 0 | 100% |
 | 图存储层 | 11 | 11 | 0 | 0 | 100% |
-| Spring Boot Starter | 5 | 4 | 1 | 0 | 90% |
+| Spring Boot Starter | 5 | 5 | 0 | 0 | 100% |
 | 教育领域示例 | 18 | 18 | 0 | 0 | 100% |
 | 高级功能 | 2 | 1 | 0 | 1 | 50% |
-| **合计** | **71** | **67** | **1** | **3** | **95%** |
+| **合计** | **79** | **76** | **0** | **3** | **96%** |

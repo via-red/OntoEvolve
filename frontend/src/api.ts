@@ -32,4 +32,5 @@ export const api = {
   getMetrics: () => fetchJSON<any>('/education/metrics'),
 
   getOntology: () => fetchJSON<any>('/education/ontology'),
+  getLlmMetrics: () => fetchJSON<any>('/education/metrics/llm'),
 };

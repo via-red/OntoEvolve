@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import type { SystemMetrics } from '../types';
+import type { SystemMetrics, LlmMetrics } from '../types';
 
 function Gauge({ value, label, max = 1, color, unit = '%' }: { value: number; label: string; max?: number; color: string; unit?: string }) {
   const hasData = value > 0;
@@ -30,11 +30,16 @@ function Gauge({ value, label, max = 1, color, unit = '%' }: { value: number; la
 
 export default function Metrics() {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const [llmMetrics, setLlmMetrics] = useState<LlmMetrics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = () => api.getMetrics().then(setMetrics).catch(() => {}).finally(() => setLoading(false));
+    const load = () => {
+      api.getMetrics().then(setMetrics).catch(() => {});
+      api.getLlmMetrics().then(setLlmMetrics).catch(() => {});
+    };
     load();
+    setLoading(false);
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -76,6 +81,34 @@ export default function Metrics() {
           <div className="stat-desc">{(m?.totalEvents ?? 0) > 0 ? '已处理的行为事件' : '暂未处理事件'}</div>
         </div>
       </div>
+
+      {/* LLM Usage Cards */}
+      {llmMetrics && llmMetrics.totalCalls > 0 && (
+        <div className="grid grid-4 mb-6">
+          <div className="stat-card">
+            <div className="stat-label">🔤 Prompt Tokens</div>
+            <div className="stat-value">{llmMetrics.totalPromptTokens.toLocaleString()}</div>
+            <div className="stat-desc">输入 token 累积量</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">📝 Completion Tokens</div>
+            <div className="stat-value">{llmMetrics.totalCompletionTokens.toLocaleString()}</div>
+            <div className="stat-desc">输出 token 累积量</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">⏱ 平均延迟</div>
+            <div className="stat-value">{llmMetrics.averageLatencyMs}ms</div>
+            <div className="stat-desc">每次 LLM 调用平均响应时间</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">⚠ LLM 错误</div>
+            <div className="stat-value" style={{ color: llmMetrics.errorCount > 0 ? 'var(--danger)' : 'var(--success)' }}>
+              {llmMetrics.errorCount}
+            </div>
+            <div className="stat-desc">{llmMetrics.errorCount > 0 ? '出现调用失败' : '无错误'}</div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-2">
         {/* Gauge Dashboard */}

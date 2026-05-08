@@ -1,29 +1,29 @@
 package com.ontoevolve.plugins.variator;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ontoevolve.core.model.Assignment;
 import com.ontoevolve.core.model.Decision;
 import com.ontoevolve.core.spi.Variator;
 import com.ontoevolve.core.spi.VariationContext;
-import org.springframework.ai.chat.client.ChatClient;
+import com.ontoevolve.infra.llm.LLMClient;
+import com.ontoevolve.infra.llm.LLMResponse;
+import com.ontoevolve.infra.llm.PromptTemplateService;
 
 import java.util.*;
 
 /**
  * 重组变异算子 — 从种群中选择两个高分亲本，由 LLM 融合生成新方案。
- * <p>
- * 模拟进化计算中的交叉操作 (Crossover)。
- * 亲本按 Pareto 前沿分层选择，高前沿者优先。
  */
 public class CrossoverVariator implements Variator<Decision, Assignment> {
 
-    private final ChatClient chatClient;
-    private final Random random;
+    private final LLMClient llmClient;
+    private final PromptTemplateService promptService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Random random = new Random();
 
-    public CrossoverVariator(ChatClient.Builder chatClientBuilder) {
-        this.chatClient = chatClientBuilder
-                .defaultSystem("你是一个决策方案设计师，擅长融合两个成功方案的优势生成更优的方案。")
-                .build();
-        this.random = new Random();
+    public CrossoverVariator(LLMClient llmClient, PromptTemplateService promptService) {
+        this.llmClient = llmClient;
+        this.promptService = promptService;
     }
 
     @Override
@@ -31,51 +31,30 @@ public class CrossoverVariator implements Variator<Decision, Assignment> {
         List<Assignment> population = ctx.getPopulation();
         if (population.size() < 2) return List.of();
 
-        // 选择两个高分亲本（按 score 向量欧几里得范数排序）
         List<Assignment> sorted = population.stream()
                 .sorted(Comparator.comparingDouble(
                         a -> -euclideanNorm(a.getScoreVector())))
                 .toList();
 
         Assignment parentA = sorted.get(0);
-        // Pick a second parent different from parentA
         int maxIndex = Math.min(3, sorted.size());
         int bIndex = random.nextInt(maxIndex - 1) + 1;
         Assignment parentB = sorted.get(bIndex);
 
-        String userPrompt = String.format("""
-                请将以下两个方案融合为一个新的、更优的方案，继承双方的优势:
+        String prompt = promptService.render("variator_crossover", Map.of(
+                "parentA", describeDecision(parentA),
+                "scoreA", Arrays.toString(parentA.getScoreVector()),
+                "trialsA", String.valueOf(parentA.getTrials()),
+                "parentB", describeDecision(parentB),
+                "scoreB", Arrays.toString(parentB.getScoreVector()),
+                "trialsB", String.valueOf(parentB.getTrials()),
+                "conceptLabel", ctx.getConcept().getLabel()
+        ));
 
-                【亲本 A】
-                %s
-                效果评分: %s | 尝试次数: %d
+        LLMResponse response = llmClient.generate(prompt);
+        if (response.content() == null || response.content().isBlank()) return List.of();
 
-                【亲本 B】
-                %s
-                效果评分: %s | 尝试次数: %d
-
-                所在生态位: %s
-
-                要求:
-                1. 融合两个方案的核心优势，避免各自的短板
-                2. 给出名称、描述和 3-5 步执行步骤
-                """,
-                describeDecision(parentA), Arrays.toString(parentA.getScoreVector()), parentA.getTrials(),
-                describeDecision(parentB), Arrays.toString(parentB.getScoreVector()), parentB.getTrials(),
-                ctx.getConcept().getLabel());
-
-        String fusionResult = chatClient.prompt()
-                .user(userPrompt)
-                .call()
-                .content();
-
-        Decision child = new Decision(
-                "crossover:" + UUID.randomUUID(),
-                extractName(fusionResult, parentA, parentB),
-                fusionResult != null && fusionResult.length() > 200
-                        ? fusionResult.substring(0, 200) : fusionResult,
-                extractSteps(fusionResult)
-        );
+        Decision child = parseDecision(response.content(), parentA, parentB);
         child.addParent(parentA.getDecision());
         child.addParent(parentB.getDecision());
 
@@ -93,6 +72,38 @@ public class CrossoverVariator implements Variator<Decision, Assignment> {
 
     @Override
     public String type() { return "CROSSOVER"; }
+
+    private Decision parseDecision(String fusion, Assignment parentA, Assignment parentB) {
+        String iri = "crossover:" + UUID.randomUUID();
+
+        // 优先 JSON 解析
+        try {
+            String json = fusion;
+            if (json.contains("```")) {
+                int start = json.indexOf('{');
+                int end = json.lastIndexOf('}');
+                if (start >= 0 && end > start) json = json.substring(start, end + 1);
+            }
+            Map<?, ?> parsed = objectMapper.readValue(json, Map.class);
+            String name = Objects.toString(parsed.get("name"), null);
+            String desc = Objects.toString(parsed.get("description"), null);
+            List<?> stepsRaw = (List<?>) parsed.get("steps");
+            List<String> steps = stepsRaw != null
+                    ? stepsRaw.stream().map(Object::toString).toList()
+                    : List.of("执行重组方案");
+            return new Decision(iri,
+                    name != null ? name : parentA.getDecision().getName() + " × " + parentB.getDecision().getName(),
+                    desc, steps);
+        } catch (Exception ignored) {
+            // 回退 regex
+        }
+
+        String name = extractName(fusion, parentA, parentB);
+        String desc = fusion != null && fusion.length() > 200
+                ? fusion.substring(0, 200) : fusion;
+        List<String> steps = extractSteps(fusion);
+        return new Decision(iri, name, desc, steps);
+    }
 
     private String describeDecision(Assignment a) {
         Decision d = a.getDecision();

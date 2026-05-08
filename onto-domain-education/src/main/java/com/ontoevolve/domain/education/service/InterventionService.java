@@ -4,8 +4,8 @@ import com.ontoevolve.core.kernel.EvolutionEngine;
 import com.ontoevolve.core.model.Assignment;
 import com.ontoevolve.core.model.Concept;
 import com.ontoevolve.core.model.Execution;
-import com.ontoevolve.core.spi.Classifier;
-import com.ontoevolve.core.spi.Matcher;
+import com.ontoevolve.core.model.Feedback;
+import com.ontoevolve.core.spi.*;
 import com.ontoevolve.domain.education.model.ActionEvent;
 import com.ontoevolve.domain.education.model.ActionType;
 import com.ontoevolve.domain.education.model.Intervention;
@@ -19,7 +19,7 @@ import java.util.*;
  * 教育干预领域编排服务。
  * <p>
  * 协调 Classifier → Matcher → Evolution 三大环节。
- * 这是领域层与框架核心之间的桥梁。
+ * 支持 Environment 自动评估和 CreditAssigner 延迟信用分配。
  */
 @Service
 public class InterventionService {
@@ -29,49 +29,46 @@ public class InterventionService {
     private final Matcher<ActionType, Intervention, Assignment> matcher;
     private final MetricsCollector metrics;
     private final Classifier<ActionEvent, ActionType> classifier;
+    private final Environment environment;
+    private final CreditAssigner creditAssigner;
+    private final List<Execution> executionHistory = Collections.synchronizedList(new ArrayList<>());
 
     public InterventionService(EducationOntologyService ontologyService,
                                EvolutionEngine evolutionEngine,
                                Matcher<?, ?, ?> matcher,
                                MetricsCollector metrics,
-                               Classifier<ActionEvent, ActionType> classifier) {
+                               Classifier<ActionEvent, ActionType> classifier,
+                               Environment environment,
+                               CreditAssigner creditAssigner) {
         this.ontologyService = ontologyService;
         this.evolutionEngine = evolutionEngine;
         this.matcher = (Matcher<ActionType, Intervention, Assignment>) matcher;
         this.metrics = metrics;
         this.classifier = classifier;
+        this.environment = environment;
+        this.creditAssigner = creditAssigner;
     }
 
     /**
-     * 处理一条行为事件：
-     * 1. 分类找到生态位（LLM 语义分类）
-     * 2. 从生态位匹配最优方案
-     * 3. 返回建议的干预方案
+     * 处理一条行为事件：分类 → 匹配 → 返回建议方案。
      */
     public Intervention processEvent(ActionEvent event) {
-        // 1. LLM 分类：基于自然语言描述确定行为类型
         ActionType actionType = classifier.classify(event);
-
-        // 2. 确保种群已播种初始方案
         seedPopulationIfEmpty(actionType);
-
-        // 3. 沿概念层次递归匹配，子概念无匹配时回退父概念
         return findMatchHierarchy(actionType, event);
     }
 
-    /** 如果种群为空，播种初始干预方案 */
     private void seedPopulationIfEmpty(ActionType actionType) {
         var pop = evolutionEngine.getOrCreatePopulation(actionType, 12);
         if (!pop.getActiveMembers().isEmpty()) return;
 
-        // 根据分类类别选择合适的初始干预方案
         List<Intervention> seeds = createSeedInterventions(actionType);
         for (Intervention intervention : seeds) {
             Assignment assignment = new Assignment(
                     "seed:" + UUID.randomUUID(),
                     intervention,
                     actionType,
-                    3 // effectiveness, cost, satisfaction
+                    3
             );
             assignment.setStatus(Assignment.Status.ACTIVE);
             assignment.setGeneration(0);
@@ -79,12 +76,10 @@ public class InterventionService {
         }
     }
 
-    /** 创建初始种子干预方案 */
     private List<Intervention> createSeedInterventions(ActionType actionType) {
         List<Intervention> seeds = new ArrayList<>();
         String cat = actionType.getCategory();
 
-        // 所有类别通用的基础方案
         seeds.add(new Intervention(
                 "seed:talk", "一对一谈话",
                 "与学生进行一对一谈话，了解情况并引导改进",
@@ -130,7 +125,6 @@ public class InterventionService {
         return seeds;
     }
 
-    /** 递归查找：从 actionType 开始匹配，若无匹配则回退父概念 */
     private Intervention findMatchHierarchy(ActionType actionType, ActionEvent event) {
         if (actionType == null) return null;
 
@@ -143,7 +137,6 @@ public class InterventionService {
             return (Intervention) matched.getDecision();
         }
 
-        // 回退到父概念
         Concept parent = actionType.getParentConcept();
         if (parent instanceof ActionType parentType) {
             return findMatchHierarchy(parentType, event);
@@ -152,9 +145,7 @@ public class InterventionService {
         return null;
     }
 
-    /**
-     * Submit evaluation with an Assignment (creates a proper Execution record).
-     */
+    /** 提交人工评估。 */
     public void submitEvaluation(Assignment assignment, String studentId,
                                  double effectiveness, double cost, double satisfaction) {
         Execution execution = new Execution(
@@ -171,15 +162,54 @@ public class InterventionService {
                 effectiveness, cost, satisfaction
         );
 
-        assignment.updateScore(evaluation.getScores());
-        evolutionEngine.recordFeedback(assignment.getConcept());
-        metrics.recordFeedback();
+        applyFeedback(assignment, execution, evaluation);
     }
 
-    /**
-     * Legacy: submit evaluation by intervention IRI.
-     * Searches all populations for the matching assignment.
-     */
+    /** 自动评估（使用 Environment）。 */
+    public void submitAutomatedEvaluation(Assignment assignment, String studentId) {
+        if (environment == null || !environment.isAutomated()) return;
+
+        Execution execution = new Execution(
+                "exec:" + UUID.randomUUID(),
+                assignment,
+                studentId,
+                "auto",
+                Map.of()
+        );
+
+        Feedback feedback = environment.evaluate(assignment, execution);
+        applyFeedback(assignment, execution, feedback);
+    }
+
+    private void applyFeedback(Assignment assignment, Execution execution, Feedback feedback) {
+        assignment.updateScore(feedback.getScores());
+        evolutionEngine.recordFeedback(assignment.getConcept());
+        metrics.recordFeedback();
+        executionHistory.add(execution);
+
+        // 信用分配：将延迟反馈传播到历史执行
+        distributeCredit(feedback, assignment.getConcept());
+    }
+
+    private void distributeCredit(Feedback feedback, Concept concept) {
+        if (creditAssigner == null || executionHistory.isEmpty()) return;
+
+        List<Execution> relevant = executionHistory.stream()
+                .filter(e -> e.getAssignment().getConcept().getIri().equals(concept.getIri()))
+                .toList();
+
+        if (!relevant.isEmpty()) {
+            List<Feedback> distributed = creditAssigner.distribute(feedback, relevant);
+            for (Feedback dfb : distributed) {
+                if (!dfb.getIri().equals(feedback.getIri())) {
+                    Assignment target = dfb.getExecution().getAssignment();
+                    target.updateScore(dfb.getScores());
+                }
+            }
+        }
+    }
+
+    /** 按干预 IRI 提交评估（搜索所有种群）。 */
     public void submitEvaluationByIntervention(String interventionIri, String studentId,
                                                 double effectiveness, double cost, double satisfaction) {
         Assignment found = findAssignmentByIntervention(interventionIri);
@@ -197,9 +227,7 @@ public class InterventionService {
                 .findFirst().orElse(null);
     }
 
-    /**
-     * 手动触发一个生态位的完整进化代。
-     */
+    /** 手动触发一个生态位的完整进化代。 */
     public void evolveNiche(String conceptIri) {
         ontologyService.findActionType(conceptIri)
                 .ifPresent(evolutionEngine::runFullEvolution);

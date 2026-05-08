@@ -31,6 +31,11 @@ edu:Social rdf:type owl:Class ;
     rdfs:label "社交问题" ;
     rdfs:comment "学生社交互动相关的问题类别" .
 
+# 顶层三大类别互斥
+edu:Behavioral owl:disjointWith edu:Academic .
+edu:Behavioral owl:disjointWith edu:Social .
+edu:Academic owl:disjointWith edu:Social .
+
 # ====================================================================
 # 行为问题子类
 # ====================================================================

@@ -173,7 +173,7 @@ Execution (执行方案) ──────► Feedback (多维向量)          
     └─► 调控：变异率、种群容量 K、拥挤度阈值                             │
     └─► 观测：全局前沿质量 (hypervolume)、多样性指数 (Shannon)          │
                                                                        │
-本体验证器 (OntologyValidator) ── 所有变异/迁移通过后置验证            │
+本体验证器 (JenaOntologyValidator) ── 所有变异/迁移通过后置验证 + OWL推理 │
     └─► TBox 约束：disjointness, domain/range, 自定义规则             │
 ```
 
@@ -608,8 +608,8 @@ Phase 4: 元进化与生产打磨 (9 — 12 个月)
 | **框架** | Spring Boot 3.2 | 自动装配、配置管理、REST API |
 | **图数据库** | Neo4j 5 | 本体实例数据（概念、种群、方案、事件-反馈图谱）持久化 |
 | **关系型数据库** | H2 (开发) / PostgreSQL (生产) | 业务数据（学生信息等）|
-| **本体推理** | Apache Jena 5.0 | OWL 本体文件加载、TBox 一致性验证 |
-| **LLM 集成** | Spring AI 1.0.3 + DeepSeek | 事件分类与变异生成（分类、Crossover、Generate） |
+| **本体推理** | Apache Jena 5.0 | OWL 本体加载、InfModel 推理、disjointness/一致性验证 |
+| **LLM 集成** | Spring AI 1.0.3 + Spring Retry | 事件分类与变异生成（@Retryable、token 统计、模板渲染） |
 | **前端** | React 18 + TypeScript + Vite | 管理界面：事件处理、种群监控、进化轨迹 |
 | **可观测性** | Micrometer 1.12 + Prometheus | 指标收集与监控 |
 | **构建工具** | Maven (多模块) | 模块化构建管理 |
@@ -620,7 +620,7 @@ Phase 4: 元进化与生产打磨 (9 — 12 个月)
 |---|---|
 | **onto-evolve-core** | 核心抽象：元本体模型、进化循环引擎接口（Variator/Selector/Migrator/MetaOptimizer）、**PopulationStore SPI**（内存/Neo4j 存储后端抽象） |
 | **onto-evolve-plugins** | 插件实现：LLM Variator、Pareto Selector、CreditAssigner、ParetoUCBMatcher 等 |
-| **onto-evolve-infra** | 基础设施：LLM 客户端适配、Metrics 收集、OntologyValidator |
+| **onto-evolve-infra** | 基础设施：LLM 客户端(@Retryable/token统计)、Metrics 收集、JenaOntologyValidator、PromptTemplateService |
 | **onto-evolve-graph-store** | Neo4j 图存储：7 种 @Node 实体、Neo4j Repository、ModelMapper、Neo4jPopulationStore（热缓存+写穿持久化） |
 | **onto-evolve-starter** | Spring Boot Starter：自动装配、@ConditionalOnProperty、YAML 配置驱动 |
 | **onto-domain-education** | 教育领域适配示例：学生行为分类、干预措施决策、效果评估本体、REST API 与 React 前端 |

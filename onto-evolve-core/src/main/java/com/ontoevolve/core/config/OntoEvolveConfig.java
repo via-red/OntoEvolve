@@ -17,6 +17,7 @@ public class OntoEvolveConfig {
     private MetaConfig meta = new MetaConfig();
     private ObservabilityConfig observability = new ObservabilityConfig();
     private CreditConfig credit = new CreditConfig();
+    private EnvironmentConfig environment = new EnvironmentConfig();
 
     // --- RDF 存储 ---
     public static class RdfConfig {
@@ -207,6 +208,19 @@ public class OntoEvolveConfig {
         public void setMetrics(MetricsConfig metrics) { this.metrics = metrics; }
     }
 
+    // --- 环境/模拟器 ---
+    public static class EnvironmentConfig {
+        private boolean simulated = false;
+        private double noiseSigma = 0.1;
+        private double bias = 0.5;
+        public boolean isSimulated() { return simulated; }
+        public void setSimulated(boolean simulated) { this.simulated = simulated; }
+        public double getNoiseSigma() { return noiseSigma; }
+        public void setNoiseSigma(double noiseSigma) { this.noiseSigma = noiseSigma; }
+        public double getBias() { return bias; }
+        public void setBias(double bias) { this.bias = bias; }
+    }
+
     // --- 信用分配 ---
     public static class CreditConfig {
         private String assigner = "uniform";
@@ -236,4 +250,6 @@ public class OntoEvolveConfig {
     public void setObservability(ObservabilityConfig observability) { this.observability = observability; }
     public CreditConfig getCredit() { return credit; }
     public void setCredit(CreditConfig credit) { this.credit = credit; }
+    public EnvironmentConfig getEnvironment() { return environment; }
+    public void setEnvironment(EnvironmentConfig environment) { this.environment = environment; }
 }
