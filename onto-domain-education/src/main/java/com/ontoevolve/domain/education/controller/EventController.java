@@ -101,6 +101,8 @@ public class EventController {
         eventRecord.put("classifiedConcept", conceptIri);
         eventRecord.put("classifiedLabel", conceptLabel);
         eventRecord.put("matchedIntervention", suggestion != null ? suggestion.getName() : "无匹配方案");
+        eventRecord.put("interventionIri", suggestion != null ? suggestion.getIri() : "");
+        eventRecord.put("suggestion", suggestion != null ? suggestion.getName() : "无匹配方案");
         eventRecord.put("timestamp", event.getTimestamp().toString());
 
         // Persist to Neo4j when available
@@ -113,10 +115,7 @@ public class EventController {
         memoryEventCount.incrementAndGet();
         if (suggestion != null) memoryInterventionCount.incrementAndGet();
 
-        // Response for immediate display
-        Map<String, Object> response = new HashMap<>(eventRecord);
-        response.put("suggestion", suggestion != null ? suggestion.getName() : "无匹配方案");
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(eventRecord);
     }
 
     private ActionType findConceptForIntervention(String interventionIri) {
@@ -152,7 +151,7 @@ public class EventController {
     }
 
     @PostMapping("/evaluation")
-    public ResponseEntity<String> submitEvaluation(@RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, String>> submitEvaluation(@RequestBody Map<String, String> body) {
         String interventionIri = body.getOrDefault("interventionIri", "");
         String studentId = body.getOrDefault("studentId", "unknown");
         double effectiveness = Double.parseDouble(body.getOrDefault("effectiveness", "0.5"));
@@ -168,7 +167,7 @@ public class EventController {
             persistEvaluationChain(interventionIri, studentId, effectiveness, cost, satisfaction);
         }
 
-        return ResponseEntity.ok("评价已提交");
+        return ResponseEntity.ok(Map.of("message", "评价已提交"));
     }
 
     private void persistEvaluationChain(String interventionIri, String studentId,
@@ -197,6 +196,30 @@ public class EventController {
         response.put("generation", pop.getGenerationCounter());
         response.put("size", pop.size());
         response.put("activeCount", pop.getActiveMembers().size());
+
+        List<Map<String, Object>> members = pop.getAllMembers().stream().map(a -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("iri", a.getIri());
+            m.put("decisionIri", a.getDecision().getIri());
+            m.put("name", a.getDecision().getName());
+            m.put("description", a.getDecision().getDescription());
+            m.put("steps", a.getDecision().getSteps());
+            m.put("scoreVector", a.getScoreVector());
+            m.put("trials", a.getTrials());
+            m.put("generation", a.getGeneration());
+            m.put("status", a.getStatus().name());
+            if (a.getParents() != null && !a.getParents().isEmpty()) {
+                m.put("parentDecisionIris", a.getParents().stream()
+                        .map(p -> p.getDecision().getIri()).toList());
+                m.put("parentNames", a.getParents().stream()
+                        .map(p -> p.getDecision().getName()).toList());
+            } else {
+                m.put("parentDecisionIris", List.of());
+                m.put("parentNames", List.of());
+            }
+            return m;
+        }).toList();
+        response.put("members", members);
         return ResponseEntity.ok(response);
     }
 

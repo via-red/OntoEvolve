@@ -198,20 +198,20 @@ public void recordFeedback(Concept concept) {
           所有分类和推理均基于此本体。
         </p>
         <div className="grid grid-3">
-          <div className="card" style={{ background: 'rgba(239,68,68,0.05)', borderColor: 'rgba(239,68,68,0.2)' }}>
-            <h4 style={{ color: '#ef4444', marginBottom: 8 }}>行为问题 Behavioral</h4>
+          <div className="card" style={{ background: 'rgba(182,106,80,0.05)', borderColor: 'rgba(182,106,80,0.2)' }}>
+            <h4 style={{ color: '#B66A50', marginBottom: 8 }}>行为问题 Behavioral</h4>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
               课堂扰乱 · 同学冲突 · 不服从管理 · 网络欺凌 · 逃课旷课 · 吸烟饮酒
             </div>
           </div>
-          <div className="card" style={{ background: 'rgba(59,130,246,0.05)', borderColor: 'rgba(59,130,246,0.2)' }}>
-            <h4 style={{ color: '#3b82f6', marginBottom: 8 }}>学业问题 Academic</h4>
+          <div className="card" style={{ background: 'rgba(57,81,65,0.05)', borderColor: 'rgba(57,81,65,0.2)' }}>
+            <h4 style={{ color: '#395141', marginBottom: 8 }}>学业问题 Academic</h4>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
               作业不交 · 考试作弊 · 成绩下滑 · 课堂走神 · 迟交作业
             </div>
           </div>
-          <div className="card" style={{ background: 'rgba(16,185,129,0.05)', borderColor: 'rgba(16,185,129,0.2)' }}>
-            <h4 style={{ color: '#10b981', marginBottom: 8 }}>社交问题 Social</h4>
+          <div className="card" style={{ background: 'rgba(112,128,112,0.05)', borderColor: 'rgba(112,128,112,0.2)' }}>
+            <h4 style={{ color: '#708070', marginBottom: 8 }}>社交问题 Social</h4>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
               社交退缩 · 破坏公物
             </div>

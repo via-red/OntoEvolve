@@ -8,9 +8,9 @@ function TreeNode({ node, depth = 0 }: { node: OntologyNode; depth?: number }) {
 
   const categoryColor = (cat: string) => {
     switch (cat) {
-      case 'Behavioral': return 'var(--danger)';
-      case 'Academic': return '#3b82f6';
-      case 'Social': return 'var(--success)';
+      case 'Behavioral': return '#B66A50';
+      case 'Academic': return '#395141';
+      case 'Social': return '#708070';
       default: return 'var(--text-secondary)';
     }
   };

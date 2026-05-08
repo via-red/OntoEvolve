@@ -7,7 +7,10 @@ import com.ontoevolve.core.store.InMemoryPopulationStore;
 import com.ontoevolve.core.validation.OntologyValidator;
 import com.ontoevolve.core.config.OntoEvolveConfig;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -26,6 +29,7 @@ public class EvolutionEngine {
     private MetaOptimizer metaOptimizer;
     private OntoEvolveConfig config;
     private final Random random = new Random();
+    private final Map<String, Instant> lastMigrationTime = new ConcurrentHashMap<>();
 
     public EvolutionEngine(Selector<Assignment> selector,
                            List<Variator> variators,
@@ -139,7 +143,7 @@ public class EvolutionEngine {
                     addTrace(new EvolTrace(
                             "trace:" + UUID.randomUUID(),
                             EvolTrace.OperationType.valueOf(selectedVariator.type()),
-                            List.of(),
+                            newborn.getParents() != null ? newborn.getParents() : List.of(),
                             newborn, newborn.getDecision(),
                             "Generation " + pop.getGenerationCounter()));
                 }
@@ -232,6 +236,16 @@ public class EvolutionEngine {
     }
 
     private void checkAndMigrate(Concept concept, DecisionPopulation pop) {
+        // Time window check: skip if migration happened within checkInterval
+        if (config != null && config.getEvolution().getMigration().getCheckInterval() != null) {
+            Instant last = lastMigrationTime.get(concept.getIri());
+            Duration interval = Duration.parse(config.getEvolution().getMigration().getCheckInterval());
+            if (last != null && Duration.between(last, Instant.now()).compareTo(interval) < 0) {
+                return; // Not yet time for next migration
+            }
+        }
+        lastMigrationTime.put(concept.getIri(), Instant.now());
+
         List<Assignment> elites = pop.getActiveMembers().stream()
                 .filter(a -> a.getStatus() == Assignment.Status.ELITE)
                 .collect(Collectors.toList());

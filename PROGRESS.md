@@ -1,7 +1,7 @@
 # OntoEvolve 开发进度
 
 > 项目版本: 0.1.0-SNAPSHOT
-> 最后更新: 2026-05-06
+> 最后更新: 2026-05-08
 
 ---
 
@@ -86,7 +86,9 @@
 | LLMGenerateVariator | ✅ 完成 | LLM 全新生成，注入生态位摘要 |
 | CrossoverVariator | ✅ 完成 | 双亲本 LLM 融合重组 |
 | PerturbVariator | ✅ 完成 | 无 LLM 局部搜索：数值替换/修饰词 |
-| **LLM/Crossover/Perturb 测试** | ⏳ 待完成 | 依赖 ChatClient，需 Mock |
+| **PerturbVariator 测试** | ✅ 完成 | 空种群/子代继承/步骤微扰/类型返回 |
+| **LLMGenerateVariator 测试** | ⏳ 待完成 | 依赖 ChatClient，需 Mock |
+| **CrossoverVariator 测试** | ⏳ 待完成 | 依赖 ChatClient，需 Mock |
 
 ### 2.3 迁移算子
 
@@ -100,14 +102,14 @@
 | 实现 | 状态 | 说明 |
 |------|------|------|
 | ParetoUCBMatcher | ✅ 完成 | Pareto归一化 + UCB探索奖励的混合策略 |
-| **ParetoUCBMatcher 测试** | ⏳ 待完成 | |
+| **ParetoUCBMatcher 测试** | ✅ 完成 | 空种群/单候选/高分优先/探索奖励/默认构造 |
 
 ### 2.5 元优化器
 
 | 实现 | 状态 | 说明 |
 |------|------|------|
 | BayesianMetaOptimizer | ✅ 完成 | 爬山法 + 随机扰动（工程简化版） |
-| **BayesianMetaOptimizer 测试** | ⏳ 待完成 | |
+| **BayesianMetaOptimizer 测试** | ✅ 完成 | 默认参数/多次优化/边界钳制/停滞降级 |
 
 ### 2.6 信用分配器
 
@@ -132,7 +134,7 @@
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | MetricsCollector | ✅ 完成 | 种群大小/反馈数/LLM调用/进化代际/超体积/Shannon多样性 |
-| **MetricsCollector 测试** | ⏳ 待完成 | |
+| **MetricsCollector 测试** | ✅ 完成 | 初始零值/种群记录/反馈/LLM调用/超体积/多样性/快照 |
 
 ---
 
@@ -174,7 +176,7 @@
 | OntoEvolveApplication | ✅ 完成 | 启动入口 |
 | application-ontoevolve.yml | ✅ 完成 | 默认配置，含完整注释，双存储模式配置 |
 | **Docker 容器化** | ✅ 完成 | docker-compose.yml 含 app + Neo4j 服务 |
-| **CI/CD 配置** | ⏳ 待完成 | |
+| **CI/CD 配置** | ✅ 部分完成 | .github/workflows/maven.yml：内存模式 + Neo4j 模式双构建矩阵，需配置 GitHub Secrets |
 
 ---
 
@@ -203,7 +205,7 @@
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | EventController (REST API) | ✅ 完成 | 6 端点：事件处理/评价提交/种群查看/触发进化/指标/本体。支持双存储模式，Neo4j 可用时自动持久化 |
-| React 前端 | ✅ 完成 | 3 页面：事件处理（模板+提交+结果流水线）、进化引擎（种群视图+进化轨迹）、学生列表。TypeScript + Vite |
+| React 前端 | ✅ 完成 | 7 页面：仪表盘/事件处理/进化引擎/本体视图/学生列表/评估指标/原理说明。TypeScript + Vite |
 
 ### 6.4 资源文件
 
@@ -225,7 +227,8 @@
 
 | 事项 | 状态 | 说明 |
 |------|------|------|
-| **领域测试** | ⏳ 待完成 | 无任何领域层测试 |
+| React 前端设计指导 | ✅ 完成 | docs/frontend-design.md：技术栈/配色系统/组件规范/API 端点/代码约定 |
+| **领域测试** | ✅ 完成 | EducationOntologyServiceTest（11 测试）、InterventionServiceTest（7 测试）、EducationOntologyValidatorTest（7 测试），合计 25 测试全部通过 |
 
 ---
 
@@ -234,7 +237,7 @@
 | 功能 | 状态 | 说明 |
 |------|------|------|
 | Prometheus 监控集成 | ⏳ 待完成 | Micrometer 依赖已引入，配置未启用 |
-| 迁移时间窗口检查 | ⏳ 待完成 | `checkAndMigrate` 未实现 `checkInterval` 逻辑 |
+| 迁移时间窗口检查 | ✅ 完成 | `checkAndMigrate` 已实现 checkInterval 逻辑，支持 Duration 配置 |
 
 ---
 
@@ -243,10 +246,10 @@
 | 层级 | 总项 | 已完成 | 部分完成 | 待完成 | 完成率 |
 |------|------|--------|----------|--------|--------|
 | 核心框架层 | 16 | 16 | 0 | 0 | 100% |
-| 插件层 | 16 | 11 | 0 | 5 | 69% |
-| 基础设施层 | 3 | 2 | 0 | 1 | 67% |
+| 插件层 | 16 | 14 | 0 | 2 | 88% |
+| 基础设施层 | 3 | 3 | 0 | 0 | 100% |
 | 图存储层 | 11 | 11 | 0 | 0 | 100% |
-| Spring Boot Starter | 5 | 4 | 0 | 1 | 80% |
-| 教育领域示例 | 17 | 16 | 0 | 1 | 94% |
-| 高级功能 | 2 | 0 | 0 | 2 | 0% |
-| **合计** | **70** | **60** | **0** | **10** | **86%** |
+| Spring Boot Starter | 5 | 4 | 1 | 0 | 90% |
+| 教育领域示例 | 18 | 18 | 0 | 0 | 100% |
+| 高级功能 | 2 | 1 | 0 | 1 | 50% |
+| **合计** | **71** | **67** | **1** | **3** | **95%** |

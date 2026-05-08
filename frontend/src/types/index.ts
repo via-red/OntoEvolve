@@ -24,6 +24,7 @@ export interface ActionEvent {
   classifiedConcept: string;
   classifiedLabel: string;
   matchedIntervention: string;
+  interventionIri?: string;
   timestamp: string;
   /** Backward compatibility: returned by processEvent endpoint */
   suggestion?: string;
@@ -63,11 +64,27 @@ export interface PopulationView {
   activeCount: number;
 }
 
+export interface AssignmentView {
+  iri: string;
+  decisionIri: string;
+  name: string;
+  description: string;
+  steps: string[];
+  scoreVector: number[];
+  trials: number;
+  generation: number;
+  status: string;
+  parentDecisionIris: string[];
+  parentNames: string[];
+}
+
 export interface EvolTrace {
   type: string;
   timestamp: string;
   decision: string;
+  decisionIri?: string;
   context: string;
+  parents?: { name: string; iri: string }[];
 }
 
 export interface SystemMetrics {

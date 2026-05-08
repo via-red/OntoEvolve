@@ -105,4 +105,56 @@ class EvolutionEngineTest {
         assertEquals(1, engine.getTraces().size());
         assertEquals("trace:1", engine.getTraces().get(0).getId());
     }
+
+    @Test
+    void fullEvolutionShouldStoreParentAssignmentsInTrace() {
+        // Custom variator that creates a child with parent reference
+        Variator<Decision, Assignment> parentAwareVariator = new Variator<>() {
+            @Override
+            public List<Assignment> generate(VariationContext ctx) {
+                List<Assignment> pop = ctx.getPopulation();
+                if (pop.isEmpty()) return List.of();
+                Assignment parent = pop.get(0);
+                Decision childDecision = new Decision(
+                        "child:1", "Child", "Derived from parent", List.of("step1"));
+                childDecision.addParent(parent.getDecision());
+                Assignment child = new Assignment("asgn:child", childDecision,
+                        ctx.getConcept(), 2);
+                child.setParents(List.of(parent));
+                child.setGeneration(parent.getGeneration() + 1);
+                return List.of(child);
+            }
+
+            @Override
+            public String type() { return "PERTURB"; }
+        };
+
+        Selector<Assignment> selector = (candidates, capacity) ->
+            candidates.size() <= capacity ? candidates : candidates.subList(0, capacity);
+        engine = new EvolutionEngine(
+                selector, List.of(parentAwareVariator), null, a -> true);
+
+        // Seed the population
+        engine.getOrCreatePopulation(concept, 10);
+        Assignment seed = new Assignment("seed:1", decision, concept, 2);
+        seed.updateScore(new double[]{0.8, 0.6});
+        seed.setStatus(Assignment.Status.ACTIVE);
+        seed.setGeneration(0);
+        engine.getOrCreatePopulation(concept, 10).addMember(seed);
+
+        engine.runFullEvolution(concept);
+
+        // Verify trace has parent references
+        List<EvolTrace> traces = engine.getTraces();
+        assertFalse(traces.isEmpty(), "Should have traces after evolution");
+
+        EvolTrace trace = traces.get(traces.size() - 1); // most recent trace
+        assertFalse(trace.getParentAssignments().isEmpty(),
+                "Trace should have parent assignments");
+        assertEquals(1, trace.getParentAssignments().size());
+        assertEquals("seed:1", trace.getParentAssignments().get(0).getIri(),
+                "Parent should be the seed assignment");
+        assertEquals("Child", trace.getProducedDecision().getName(),
+                "Produced decision should be the child");
+    }
 }

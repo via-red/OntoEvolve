@@ -61,7 +61,7 @@ export default function Events() {
     setEvalSubmitting(true);
     try {
       await api.submitEvaluation({
-        interventionIri: result.matchedIntervention,
+        interventionIri: result.interventionIri || result.matchedIntervention,
         studentId: result.studentId,
         ...evalForm,
       });

@@ -1,0 +1,54 @@
+name: OntoEvolve CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      neo4j:
+        image: neo4j:5
+        env:
+          NEO4J_AUTH: neo4j/testpassword
+        ports:
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p testpassword 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build and test (memory mode)
+        run: mvn clean verify -B -q
+        env:
+          ONTO_GRAPH_STORE_TYPE: memory
+
+      - name: Build and test (Neo4j mode)
+        run: mvn clean verify -B -q -pl onto-evolve-graph-store,onto-domain-education
+        env:
+          ONTO_GRAPH_STORE_TYPE: neo4j
+          SPRING_NEO4J_URI: bolt://localhost:7687
+          SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
+          SPRING_NEO4J_AUTHENTICATION_PASSWORD: testpassword
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/target/surefire-reports/TEST-*.xml'

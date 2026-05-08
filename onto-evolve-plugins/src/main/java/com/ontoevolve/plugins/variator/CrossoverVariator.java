@@ -38,7 +38,10 @@ public class CrossoverVariator implements Variator<Decision, Assignment> {
                 .toList();
 
         Assignment parentA = sorted.get(0);
-        Assignment parentB = sorted.get(random.nextInt(Math.min(3, sorted.size())));
+        // Pick a second parent different from parentA
+        int maxIndex = Math.min(3, sorted.size());
+        int bIndex = random.nextInt(maxIndex - 1) + 1;
+        Assignment parentB = sorted.get(bIndex);
 
         String userPrompt = String.format("""
                 请将以下两个方案融合为一个新的、更优的方案，继承双方的优势:
