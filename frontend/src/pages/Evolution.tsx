@@ -1,5 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { api } from '../api';
+import Tree from 'react-d3-tree';
+import type { RawNodeDatum, CustomNodeElementProps, Point } from 'react-d3-tree';
 import type { PopulationView, AssignmentView, EvolTrace } from '../types';
 
 const OP_COLORS: Record<string, string> = {
@@ -24,31 +26,21 @@ const CATEGORY_COLORS: Record<string, string> = {
   Social: '#708070',
 };
 
-/* ───── Ancestry Tree Component ───── */
-
-interface TreeNode {
-  name: string;
-  iri: string;
-  type: string;
-  parents: TreeNode[];
-  timestamp?: string;
-}
+/* ───── Ancestry Tree Component (react-d3-tree) ───── */
 
 function AncestryTree({ decisionIri, traces }: { decisionIri: string; traces: EvolTrace[] }) {
-  // Build a lookup: decisionIri → trace info (name, type, parents)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const treeScope = useRef(`gt-${Math.random().toString(36).slice(2, 8)}`).current;
+  const [dimensions, setDimensions] = useState({ width: 600, height: 400 });
+
+  // Build node lookup
   const nodeMap = useMemo(() => {
-    const map = new Map<string, { name: string; type: string; parents: { name: string; iri: string }[]; timestamp?: string }>();
+    const map = new Map<string, { name: string; type: string; parents: { name: string; iri: string }[] }>();
     traces.forEach(t => {
       const iri = t.decisionIri;
       if (iri) {
-        map.set(iri, {
-          name: t.decision,
-          type: t.type,
-          parents: t.parents || [],
-          timestamp: t.timestamp,
-        });
+        map.set(iri, { name: t.decision, type: t.type, parents: t.parents || [] });
       }
-      // Ensure parent entries exist even if they have no producing trace
       (t.parents || []).forEach(p => {
         if (!map.has(p.iri)) {
           map.set(p.iri, { name: p.name, type: 'SEED', parents: [] });
@@ -58,100 +50,92 @@ function AncestryTree({ decisionIri, traces }: { decisionIri: string; traces: Ev
     return map;
   }, [traces]);
 
-  // Recursively build tree from leaf upward
-  const buildTree = (iri: string): TreeNode | null => {
+  // Build RawNodeDatum tree: root = selected (renders at bottom with depthFactor < 0)
+  const buildTreeData = useCallback((iri: string): RawNodeDatum | null => {
     const info = nodeMap.get(iri);
     if (!info) return null;
+    const children = info.parents
+      .map(p => buildTreeData(p.iri))
+      .filter((n): n is RawNodeDatum => n !== null);
     return {
       name: info.name,
-      iri: iri,
-      type: info.type,
-      timestamp: info.timestamp,
-      parents: info.parents.map(p => buildTree(p.iri)).filter((n): n is TreeNode => n !== null),
+      attributes: { type: info.type },
+      children: children.length > 0 ? children : undefined,
     };
-  };
+  }, [nodeMap]);
 
-  const root = useMemo(() => buildTree(decisionIri), [decisionIri, nodeMap]);
+  const treeData = useMemo(() => decisionIri ? buildTreeData(decisionIri) : null, [decisionIri, buildTreeData]);
 
-  if (!root) {
+  // Measure container
+  useEffect(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDimensions({ width: rect.width || 600, height: 450 });
+    }
+  }, [treeData]);
+
+  const translate: Point = { x: dimensions.width / 2, y: dimensions.height - 60 };
+
+  // Genealogy-style node card with solid background
+  const renderNode = useCallback(({ nodeDatum }: CustomNodeElementProps) => {
+    const type = (nodeDatum.attributes?.type as string) || 'SEED';
+    const c = OP_COLORS[type] || '#999';
+    return (
+      <foreignObject width="160" height="52" x="-80" y="-26" style={{ overflow: 'visible' }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          width: 160, height: 52, boxSizing: 'border-box',
+          padding: '6px 14px', gap: 2,
+          borderRadius: 8,
+          background: 'var(--bg-card)',
+          border: `2px solid ${c}`,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          whiteSpace: 'nowrap', fontFamily: 'inherit',
+          cursor: 'default',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {nodeDatum.name.length > 18 ? nodeDatum.name.slice(0, 18) + '…' : nodeDatum.name}
+          </span>
+          <span style={{ fontSize: 10, color: c, fontWeight: 500, lineHeight: 1.4 }}>
+            ● {OP_LABELS[type] || type}
+          </span>
+        </div>
+      </foreignObject>
+    );
+  }, []);
+
+  if (!treeData) {
     return <div style={{ padding: 20, color: 'var(--text-muted)', textAlign: 'center' }}>未找到族谱数据</div>;
   }
 
   return (
     <div className="card mt-4">
       <div className="card-header">
-        <div className="card-title">🧬 方案「{root.name}」的进化族谱</div>
+        <div className="card-title">🧬 进化族谱</div>
       </div>
-      <div style={{ padding: '24px 0', overflowX: 'auto' }}>
-        <TreeNodeComponent node={root} depth={maxDepth(root)} />
+      <div className={treeScope} ref={containerRef} style={{ width: '100%', height: 450 }}>
+        <style>{`
+          .${treeScope} .rd3t-link {
+            fill: none;
+            stroke: #b0b8c0;
+            stroke-width: 1.5;
+            opacity: 0.6;
+          }
+        `}</style>
+        <Tree
+          data={treeData}
+          orientation="vertical"
+          depthFactor={-200}
+          translate={translate}
+          nodeSize={{ x: 200, y: 90 }}
+          separation={{ siblings: 1.2, nonSiblings: 1.8 }}
+          pathFunc="diagonal"
+          collapsible={false}
+          zoomable={true}
+          draggable={true}
+          renderCustomNodeElement={renderNode}
+        />
       </div>
-    </div>
-  );
-}
-
-function maxDepth(node: TreeNode): number {
-  if (node.parents.length === 0) return 0;
-  return 1 + Math.max(...node.parents.map(maxDepth));
-}
-
-function TreeNodeComponent({ node, depth }: { node: TreeNode; depth: number }) {
-  const color = OP_COLORS[node.type] || 'var(--text-muted)';
-  const isLeaf = node.parents.length === 0;
-
-  if (depth === 0 || isLeaf) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <NodeBadge name={node.name} type={node.type} color={color} />
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* Parents row */}
-      {node.parents.length === 1 ? (
-        <TreeNodeComponent node={node.parents[0]} depth={depth - 1} />
-      ) : (
-        <div style={{ display: 'flex', gap: 80, position: 'relative' }}>
-          {node.parents.map((p, i) => (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <TreeNodeComponent node={p} depth={depth - 1} />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Connector */}
-      {node.parents.length === 1 ? (
-        <div style={{ width: 2, height: 24, background: 'var(--border)' }} />
-      ) : (
-        <div style={{ position: 'relative', width: '100%', height: 24 }}>
-          <div style={{ position: 'absolute', top: 0, left: '25%', right: '25%', height: 2, background: 'var(--border)' }} />
-          <div style={{ position: 'absolute', top: 0, left: '25%', width: 2, height: 12, background: 'var(--border)' }} />
-          <div style={{ position: 'absolute', top: 0, right: '25%', width: 2, height: 12, background: 'var(--border)' }} />
-          <div style={{ position: 'absolute', top: 12, left: '50%', width: 2, height: 12, background: 'var(--border)' }} />
-        </div>
-      )}
-
-      {/* Current node */}
-      <NodeBadge name={node.name} type={node.type} color={color} />
-    </div>
-  );
-}
-
-function NodeBadge({ name, type, color }: { name: string; type: string; color: string }) {
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-      padding: '8px 16px', borderRadius: 8, border: `2px solid ${color}`,
-      background: `${color}10`, minWidth: 100,
-    }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>
-        {name.length > 16 ? name.slice(0, 16) + '…' : name}
-      </span>
-      <span className="badge" style={{ background: `${color}20`, color, fontSize: 11 }}>
-        {OP_LABELS[type] || type}
-      </span>
     </div>
   );
 }
