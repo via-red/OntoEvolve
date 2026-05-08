@@ -25,6 +25,10 @@ export interface ActionEvent {
   classifiedLabel: string;
   matchedIntervention: string;
   timestamp: string;
+  /** Backward compatibility: returned by processEvent endpoint */
+  suggestion?: string;
+  /** Error message on failure */
+  error?: string;
 }
 
 export interface OntologyNode {

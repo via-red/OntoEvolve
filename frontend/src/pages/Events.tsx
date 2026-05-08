@@ -19,26 +19,57 @@ export default function Events() {
   const [events, setEvents] = useState<ActionEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ActionEvent | null>(null);
+  const [error, setError] = useState('');
   const [form, setForm] = useState({ studentId: 'SGPF0001', description: BEHAVIOR_TEMPLATES[0].desc, severity: 'moderate', location: '教室' });
   const [copyIndex, setCopyIndex] = useState(-1);
 
+  // Evaluation state
+  const [evalForm, setEvalForm] = useState({ effectiveness: 0.7, cost: 0.3, satisfaction: 0.8 });
+  const [evalSubmitting, setEvalSubmitting] = useState(false);
+  const [evalDone, setEvalDone] = useState(false);
+
   useEffect(() => {
-    api.getEvents().then(setEvents).catch(() => {}).finally(() => setLoading(false));
+    loadEvents();
   }, []);
+
+  const loadEvents = async () => {
+    try {
+      const evts = await api.getEvents();
+      setEvents(evts);
+    } catch (e) {}
+    setLoading(false);
+  };
 
   const handleSubmit = async () => {
     setSubmitting(true);
     setResult(null);
+    setError('');
+    setEvalDone(false);
     try {
       const res = await api.processEvent(form);
-      setResult(res);
-      const evts = await api.getEvents();
-      setEvents(evts);
+      setResult(res as ActionEvent);
+      await loadEvents();
     } catch (e: any) {
-      setResult({ error: e.message });
+      setError(e.message || '事件处理失败');
     }
     setSubmitting(false);
+  };
+
+  const handleEvaluation = async () => {
+    if (!result) return;
+    setEvalSubmitting(true);
+    try {
+      await api.submitEvaluation({
+        interventionIri: result.matchedIntervention,
+        studentId: result.studentId,
+        ...evalForm,
+      });
+      setEvalDone(true);
+    } catch (e: any) {
+      setError('评价提交失败: ' + (e.message || ''));
+    }
+    setEvalSubmitting(false);
   };
 
   const pickTemplate = (idx: number) => {
@@ -57,101 +88,148 @@ export default function Events() {
     <div>
       <div className="page-header">
         <h2>⚡ 事件处理</h2>
-        <p>提交行为事件 → LLM 分类 → 方案匹配 → 查看处理结果</p>
+        <p>提交行为事件 → LLM 分类 → 方案匹配 → 反馈评价</p>
       </div>
 
       <div className="grid grid-2">
-        {/* 事件提交表单 */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">提交行为事件</div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>学生 ID</label>
-              <input type="text" value={form.studentId}
-                onChange={e => setForm(f => ({ ...f, studentId: e.target.value }))}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text)', fontSize: 14 }}
-              />
+        {/* Left: Event submission */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">提交行为事件</div>
             </div>
 
-            <div>
-              <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>行为描述</label>
-              <textarea value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                rows={3}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text)', fontSize: 14, resize: 'vertical' }}
-              />
-            </div>
-
-            <div className="flex gap-2 flex-wrap">
-              {BEHAVIOR_TEMPLATES.map((t, i) => (
-                <button key={i} className={`btn btn-sm ${copyIndex === i ? 'btn-primary' : ''}`}
-                  style={{ background: copyIndex === i ? undefined : 'var(--bg-card-hover)', color: copyIndex === i ? undefined : 'var(--text-secondary)' }}
-                  onClick={() => pickTemplate(i)}>
-                  {t.desc.slice(0, 12)}...
-                </button>
-              ))}
-            </div>
-
-            <div className="flex gap-4">
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>严重程度</label>
-                <select value={form.severity}
-                  onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text)', fontSize: 14 }}>
-                  <option value="mild">轻微</option>
-                  <option value="moderate">中等</option>
-                  <option value="severe">严重</option>
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>地点</label>
-                <input type="text" value={form.location}
-                  onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>学生 ID</label>
+                <input type="text" value={form.studentId}
+                  onChange={e => setForm(f => ({ ...f, studentId: e.target.value }))}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text)', fontSize: 14 }}
                 />
               </div>
-            </div>
 
-            <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? '处理中...' : '🚀 提交事件'}
-            </button>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>行为描述</label>
+                <textarea value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text)', fontSize: 14, resize: 'vertical' }}
+                />
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                {BEHAVIOR_TEMPLATES.map((t, i) => (
+                  <button key={i} className={`btn btn-sm ${copyIndex === i ? 'btn-primary' : ''}`}
+                    style={{ background: copyIndex === i ? undefined : 'var(--bg-card-hover)', color: copyIndex === i ? undefined : 'var(--text-secondary)' }}
+                    onClick={() => pickTemplate(i)}>
+                    {t.desc.slice(0, 12)}...
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-4">
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>严重程度</label>
+                  <select value={form.severity}
+                    onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text)', fontSize: 14 }}>
+                    <option value="mild">轻微</option>
+                    <option value="moderate">中等</option>
+                    <option value="severe">严重</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>地点</label>
+                  <input type="text" value={form.location}
+                    onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text)', fontSize: 14 }}
+                  />
+                </div>
+              </div>
+
+              <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? '处理中...' : '🚀 提交事件'}
+              </button>
+            </div>
           </div>
 
-          {/* 处理结果 */}
+          {/* Processing Result */}
           {result && (
-            <div className="mt-4">
-              <div className="card-title mb-4">处理结果</div>
-              {result.error ? (
-                <div className="code-block" style={{ color: 'var(--danger)' }}>错误: {result.error}</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div className="pipeline">
-                    <div className="pipeline-step active" style={{ flex: 2 }}>
-                      <div className="step-label">📥 事件</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{result.eventId?.slice(0, 20)}...</div>
-                    </div>
-                    <div className="pipeline-arrow">→</div>
-                    <div className="pipeline-step active" style={{ flex: 2 }}>
-                      <div className="step-label">🏷️ 分类</div>
-                      <div style={{ fontSize: 12, color: 'var(--primary-light)', marginTop: 4 }}>{result.classifiedConcept || '—'}</div>
-                    </div>
-                    <div className="pipeline-arrow">→</div>
-                    <div className="pipeline-step active" style={{ flex: 2 }}>
-                      <div className="step-label">💊 方案</div>
-                      <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>{result.suggestion}</div>
-                    </div>
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">处理结果</div>
+              </div>
+
+              <div className="pipeline" style={{ padding: '12px 0' }}>
+                <div className="pipeline-step active" style={{ flex: 2, padding: '10px 12px' }}>
+                  <div className="step-label">📥 事件</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, wordBreak: 'break-all' }}>
+                    {(result.description || '').slice(0, 30)}...
                   </div>
+                </div>
+                <div className="pipeline-arrow">→</div>
+                <div className="pipeline-step active" style={{ flex: 2, padding: '10px 12px' }}>
+                  <div className="step-label">🏷️ 分类</div>
+                  <div style={{ fontSize: 12, color: 'var(--primary-light)', marginTop: 4 }}>
+                    {result.classifiedLabel || '—'}
+                  </div>
+                </div>
+                <div className="pipeline-arrow">→</div>
+                <div className="pipeline-step active" style={{ flex: 2, padding: '10px 12px' }}>
+                  <div className="step-label">💊 方案</div>
+                  <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
+                    {result.matchedIntervention || result.suggestion || '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Evaluation Form */}
+              {!evalDone ? (
+                <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 16, marginTop: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>📝 评价反馈</div>
+                  {[
+                    { key: 'effectiveness', label: '效果 (Effectiveness)', emoji: '🎯', desc: '干预措施是否有效改善了行为' },
+                    { key: 'cost', label: '成本 (Cost)', emoji: '💰', desc: '干预措施的资源消耗成本', reversed: true },
+                    { key: 'satisfaction', label: '满意度 (Satisfaction)', emoji: '😊', desc: '学生和老师对干预的接受程度' },
+                  ].map(item => (
+                    <div key={item.key} style={{ marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {item.emoji} {item.label}
+                        </label>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-light)' }}>
+                          {((item.reversed ? 1 - (evalForm as any)[item.key] : (evalForm as any)[item.key]) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <input type="range" min="0" max="1" step="0.05"
+                        value={(evalForm as any)[item.key]}
+                        onChange={e => setEvalForm(f => ({ ...f, [item.key]: parseFloat(e.target.value) }))}
+                        style={{ width: '100%', accentColor: 'var(--primary)' }}
+                      />
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.desc}</div>
+                    </div>
+                  ))}
+                  <button className="btn btn-primary" onClick={handleEvaluation} disabled={evalSubmitting} style={{ width: '100%', justifyContent: 'center' }}>
+                    {evalSubmitting ? '提交中...' : '📊 提交评价'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 16, color: 'var(--success)' }}>
+                  ✅ 评价已提交，感谢反馈！
                 </div>
               )}
             </div>
           )}
+
+          {error && (
+            <div className="code-block" style={{ color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}>
+              ❌ {error}
+            </div>
+          )}
         </div>
 
-        {/* 事件历史 */}
-        <div className="card" style={{ overflow: 'auto', maxHeight: '70vh' }}>
+        {/* Right: Event History */}
+        <div className="card" style={{ overflow: 'auto', maxHeight: '80vh' }}>
           <div className="card-header">
             <div className="card-title">事件历史</div>
             <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{events.length} 条</span>
@@ -159,8 +237,10 @@ export default function Events() {
           {loading ? (
             <div className="loading">加载中...</div>
           ) : events.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: 14, textAlign: 'center', padding: 40 }}>
-              暂无事件记录，请在上方提交事件
+            <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', background: 'transparent' }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
+              <p>暂无事件记录</p>
+              <p style={{ fontSize: 13, marginTop: 8 }}>请在左侧提交行为事件</p>
             </div>
           ) : (
             <table>
@@ -174,13 +254,19 @@ export default function Events() {
                 </tr>
               </thead>
               <tbody>
-                {events.slice().reverse().map(e => (
-                  <tr key={e.eventId}>
+                {[...events].reverse().map((e: any, idx) => (
+                  <tr key={e.eventId || idx}>
                     <td><code style={{ fontSize: 11 }}>{e.studentId}</code></td>
-                    <td><span className="badge badge-info">{e.classifiedLabel || e.classifiedConcept?.split('#')[1] || '—'}</span></td>
-                    <td style={{ fontSize: 13 }}>{e.matchedIntervention || '—'}</td>
+                    <td>
+                      <span className="badge badge-info">
+                        {e.classifiedLabel || e.classifiedConcept?.split('#')[1] || '—'}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 13, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {e.matchedIntervention || '—'}
+                    </td>
                     <td>{severityBadge(e.severity)}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {e.timestamp ? new Date(e.timestamp).toLocaleString('zh-CN') : '—'}
                     </td>
                   </tr>

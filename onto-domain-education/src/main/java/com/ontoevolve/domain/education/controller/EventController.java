@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/api/education")
@@ -42,6 +43,11 @@ public class EventController {
     private final EvaluationRepository evaluationNeoRepo;
     private final ExecutionRepository executionNeoRepo;
     private final AssignmentRepository assignmentNeoRepo;
+
+    // In-memory event store for memory mode
+    private final List<Map<String, Object>> memoryEventStore = Collections.synchronizedList(new ArrayList<>());
+    private final AtomicLong memoryEventCount = new AtomicLong(0);
+    private final AtomicLong memoryInterventionCount = new AtomicLong(0);
 
     public EventController(InterventionService interventionService,
                            MetricsCollector metrics,
@@ -74,17 +80,56 @@ public class EventController {
 
         Intervention suggestion = interventionService.processEvent(event);
 
+        // Resolve actual classified concept info
+        String conceptIri = "";
+        String conceptLabel = "";
+        if (suggestion != null) {
+            ActionType classifiedType = findConceptForIntervention(suggestion.getIri());
+            if (classifiedType != null) {
+                conceptIri = classifiedType.getIri();
+                conceptLabel = classifiedType.getLabel();
+            }
+        }
+
+        // Build event record for history
+        Map<String, Object> eventRecord = new LinkedHashMap<>();
+        eventRecord.put("eventId", event.getId());
+        eventRecord.put("studentId", event.getStudentId());
+        eventRecord.put("description", event.getBehaviorDescription());
+        eventRecord.put("location", event.getLocation());
+        eventRecord.put("severity", event.getSeverity());
+        eventRecord.put("classifiedConcept", conceptIri);
+        eventRecord.put("classifiedLabel", conceptLabel);
+        eventRecord.put("matchedIntervention", suggestion != null ? suggestion.getName() : "无匹配方案");
+        eventRecord.put("timestamp", event.getTimestamp().toString());
+
         // Persist to Neo4j when available
         if (actionEventNeoRepo != null && suggestion != null) {
             persistEventWithRelation(event, suggestion);
         }
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("eventId", event.getId());
+        // Always store in memory for history display
+        memoryEventStore.add(eventRecord);
+        memoryEventCount.incrementAndGet();
+        if (suggestion != null) memoryInterventionCount.incrementAndGet();
+
+        // Response for immediate display
+        Map<String, Object> response = new HashMap<>(eventRecord);
         response.put("suggestion", suggestion != null ? suggestion.getName() : "无匹配方案");
-        response.put("studentId", event.getStudentId());
-        response.put("classifiedConcept", suggestion != null ? "已分类" : "未分类");
         return ResponseEntity.ok(response);
+    }
+
+    private ActionType findConceptForIntervention(String interventionIri) {
+        return interventionService.getEvolutionEngine().getPopulations().entrySet().stream()
+                .filter(e -> e.getValue().getActiveMembers().stream()
+                        .anyMatch(a -> a.getDecision().getIri().equals(interventionIri)))
+                .findFirst()
+                .map(e -> {
+                    com.ontoevolve.core.model.Concept c = e.getValue().getConcept();
+                    if (c instanceof ActionType at) return at;
+                    return null;
+                })
+                .orElse(null);
     }
 
     private void persistEventWithRelation(ActionEvent event, Intervention suggestion) {
@@ -166,15 +211,18 @@ public class EventController {
         EvolutionEngine engine = interventionService.getEvolutionEngine();
         var globalMetrics = metrics.snapshot(engine.getPopulations());
 
+        long eventCount = actionEventNeoRepo != null ? actionEventNeoRepo.count() : memoryEventCount.get();
+        long interventionCount = assignmentNeoRepo != null ? assignmentNeoRepo.count() : memoryInterventionCount.get();
+
         Map<String, Object> response = new HashMap<>();
         response.put("totalFeedbacks", globalMetrics.getTotalFeedback());
         response.put("llmCalls", globalMetrics.getLlmCallCost());
         response.put("averageHypervolume", globalMetrics.getAverageHypervolume());
         response.put("nicheDiversity", globalMetrics.getNicheDiversityIndex());
-        response.put("totalPopulations", globalMetrics.getTotalPopulations());
-        response.put("totalEvents", actionEventNeoRepo != null ? actionEventNeoRepo.count() : 0);
+        response.put("totalPopulations", engine.getPopulations().size());
+        response.put("totalEvents", eventCount);
         response.put("totalStudents", studentRepo.count());
-        response.put("totalInterventions", assignmentNeoRepo != null ? assignmentNeoRepo.count() : 0);
+        response.put("totalInterventions", interventionCount);
         return ResponseEntity.ok(response);
     }
 
@@ -186,7 +234,19 @@ public class EventController {
             m.put("type", t.getOperationType());
             m.put("timestamp", t.getTimestamp().toString());
             m.put("decision", t.getProducedDecision() != null ? t.getProducedDecision().getName() : "");
+            m.put("decisionIri", t.getProducedDecision() != null ? t.getProducedDecision().getIri() : "");
             m.put("context", t.getContextDescription());
+            // Include parent reference for genealogy tree
+            if (t.getParentAssignments() != null && !t.getParentAssignments().isEmpty()) {
+                m.put("parents", t.getParentAssignments().stream()
+                        .map(a -> Map.of(
+                                "name", a.getDecision() != null ? a.getDecision().getName() : "",
+                                "iri", a.getDecision() != null ? a.getDecision().getIri() : ""
+                        ))
+                        .toList());
+            } else {
+                m.put("parents", List.of());
+            }
             return m;
         }).toList();
         return ResponseEntity.ok(traces);
@@ -197,7 +257,10 @@ public class EventController {
         if (actionEventNeoRepo != null) {
             return ResponseEntity.ok(actionEventNeoRepo.findAll());
         }
-        return ResponseEntity.ok(List.of());
+        // Return in-memory events when Neo4j is not available
+        synchronized (memoryEventStore) {
+            return ResponseEntity.ok(new ArrayList<>(memoryEventStore));
+        }
     }
 
     @GetMapping("/populations")
