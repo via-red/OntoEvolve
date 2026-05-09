@@ -6,6 +6,7 @@
 [![Java 17](https://img.shields.io/badge/Java-17-%23ED8B00.svg)](https://openjdk.org/projects/jdk/17/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-6DB33F)](https://spring.io/projects/spring-boot)
 [![Apache Jena](https://img.shields.io/badge/Apache%20Jena-5.0-0277BD)](https://jena.apache.org/)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/via-red/OntoEvolve)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 > **官网**: [https://self-evolve--viaredoutlook.replit.app/](https://self-evolve--viaredoutlook.replit.app/) — 交互式演示与文档
