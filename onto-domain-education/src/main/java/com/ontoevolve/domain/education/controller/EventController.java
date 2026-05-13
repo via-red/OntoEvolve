@@ -23,8 +23,11 @@ import com.ontoevolve.domain.education.model.Intervention;
 import com.ontoevolve.domain.education.repository.StudentRepository;
 import com.ontoevolve.domain.education.service.InterventionService;
 import com.ontoevolve.infra.metrics.MetricsCollector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -38,6 +41,8 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/education")
 public class EventController {
+
+    private static final Logger log = LoggerFactory.getLogger(EventController.class);
 
     private final InterventionService interventionService;
     private final MetricsCollector metrics;
@@ -415,7 +420,7 @@ public class EventController {
             for (Assignment a : pop.getAllMembers()) {
                 if (status != null && !status.isEmpty() && !status.equalsIgnoreCase(a.getStatus().name())) continue;
 
-                Intervention interv = (Intervention) a.getDecision();
+                if (!(a.getDecision() instanceof Intervention interv)) continue;
                 if (interventionType != null && !interventionType.isEmpty()
                         && !interventionType.equalsIgnoreCase(interv.getInterventionType())) continue;
 
@@ -540,78 +545,97 @@ public class EventController {
     // Graph data (concept instance relationships)
     // ================================================================
 
-    @GetMapping("/graph")
-    public ResponseEntity<Map<String, Object>> getGraphData(@RequestParam("conceptIri") String conceptIri) {
+    @GetMapping({"/graph", "/graph/{conceptIri}"})
+    public ResponseEntity<Map<String, Object>> getGraphData(
+            @RequestParam(value = "conceptIri", required = false) String conceptIriParam,
+            @PathVariable(value = "conceptIri", required = false) String conceptIriPath) {
+        String conceptIri = conceptIriParam != null ? conceptIriParam : conceptIriPath;
+        if (conceptIri == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Missing required parameter 'conceptIri'"));
+        }
+        log.debug("getGraphData called with conceptIri={}", conceptIri);
         EvolutionEngine engine = interventionService.getEvolutionEngine();
         DecisionPopulation pop = engine.getPopulations().get(conceptIri);
-        if (pop == null) return ResponseEntity.notFound().build();
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("conceptIri", conceptIri);
-        result.put("conceptLabel", pop.getConcept().getLabel());
+        result.put("nodes", List.of());
+        result.put("edges", List.of());
 
-        List<Map<String, Object>> nodes = new ArrayList<>();
-        List<Map<String, Object>> edges = new ArrayList<>();
-        Set<String> nodeIds = new HashSet<>();
+        if (pop == null) {
+            log.debug("No population data for conceptIri={}, returning empty graph", conceptIri);
+            result.put("conceptLabel", conceptIri.contains("#") ? conceptIri.substring(conceptIri.indexOf('#') + 1) : conceptIri);
+            return ResponseEntity.ok(result);
+        }
 
-        // Concept node
-        addNode(nodes, nodeIds, conceptIri, "ActionType", pop.getConcept().getLabel(),
-                Map.of("category", pop.getConcept().getProperties().getOrDefault("category", "")));
+        try {
+            result.put("conceptLabel", pop.getConcept().getLabel());
 
-        // Assignment nodes + edges
-        for (Assignment a : pop.getAllMembers()) {
-            String aId = a.getIri();
-            addNode(nodes, nodeIds, aId, "Assignment", a.getDecision().getName(),
-                    Map.of("status", a.getStatus().name(), "generation", String.valueOf(a.getGeneration()),
-                            "effectiveness", String.format("%.2f", a.getScoreVector().length > 0 ? a.getScoreVector()[0] : 0),
-                            "trials", String.valueOf(a.getTrials())));
-            addEdge(edges, aId, conceptIri, "FOR_CONCEPT");
+            List<Map<String, Object>> nodes = new ArrayList<>();
+            List<Map<String, Object>> edges = new ArrayList<>();
+            Set<String> nodeIds = new HashSet<>();
 
-            // Intervention node
-            String iId = a.getDecision().getIri();
-            if (nodeIds.add(iId)) {
-                Map<String, Object> iProps = new LinkedHashMap<>();
-                iProps.put("description", a.getDecision().getDescription());
-                if (a.getDecision() instanceof Intervention interv) {
-                    iProps.put("interventionType", interv.getInterventionType());
+            // Concept node
+            addNode(nodes, nodeIds, conceptIri, "ActionType", pop.getConcept().getLabel(),
+                    Map.of("category", pop.getConcept().getProperties().getOrDefault("category", "")));
+
+            // Assignment nodes + edges
+            for (Assignment a : pop.getAllMembers()) {
+                String aId = a.getIri();
+                addNode(nodes, nodeIds, aId, "Assignment", a.getDecision().getName(),
+                        Map.of("status", a.getStatus().name(), "generation", String.valueOf(a.getGeneration()),
+                                "effectiveness", String.format("%.2f", a.getScoreVector().length > 0 ? a.getScoreVector()[0] : 0),
+                                "trials", String.valueOf(a.getTrials())));
+                addEdge(edges, aId, conceptIri, "FOR_CONCEPT");
+
+                // Intervention node
+                String iId = a.getDecision().getIri();
+                if (nodeIds.add(iId)) {
+                    Map<String, Object> iProps = new LinkedHashMap<>();
+                    iProps.put("description", a.getDecision().getDescription());
+                    if (a.getDecision() instanceof Intervention interv) {
+                        iProps.put("interventionType", interv.getInterventionType());
+                    }
+                    nodes.add(Map.of("id", iId, "type", "Intervention", "label", a.getDecision().getName(), "properties", iProps));
                 }
-                nodes.add(Map.of("id", iId, "type", "Intervention", "label", a.getDecision().getName(), "properties", iProps));
-            }
-            addEdge(edges, aId, iId, "DECIDES");
+                addEdge(edges, aId, iId, "DECIDES");
 
-            // Parent assignments
-            if (a.getParents() != null) {
-                for (Assignment parent : a.getParents()) {
-                    addEdge(edges, aId, parent.getIri(), "HAS_PARENT");
-                    if (nodeIds.add(parent.getIri())) {
-                        nodes.add(Map.of("id", parent.getIri(), "type", "Assignment", "label", parent.getDecision().getName(),
-                                "properties", Map.of("status", parent.getStatus().name(), "generation", String.valueOf(parent.getGeneration()))));
+                // Parent assignments
+                if (a.getParents() != null) {
+                    for (Assignment parent : a.getParents()) {
+                        addEdge(edges, aId, parent.getIri(), "HAS_PARENT");
+                        if (nodeIds.add(parent.getIri())) {
+                            nodes.add(Map.of("id", parent.getIri(), "type", "Assignment", "label", parent.getDecision().getName(),
+                                    "properties", Map.of("status", parent.getStatus().name(), "generation", String.valueOf(parent.getGeneration()))));
+                        }
                     }
                 }
             }
-        }
 
-        // Events classified to this concept (from memory store)
-        String ns = "http://ontoevolve/education#";
-        synchronized (memoryEventStore) {
-            for (Map<String, Object> evt : memoryEventStore) {
-                String cc = (String) evt.get("classifiedConcept");
-                if (cc != null && (cc.equals(conceptIri) || cc.endsWith(conceptIri) || conceptIri.endsWith(cc))) {
-                    String eId = (String) evt.get("eventId");
-                    if (eId != null && nodeIds.add(eId)) {
-                        nodes.add(Map.of("id", eId, "type", "ActionEvent", "label",
-                                evt.getOrDefault("description", "").toString(),
-                                "properties", Map.of("studentId", evt.getOrDefault("studentId", "").toString(),
-                                        "severity", evt.getOrDefault("severity", "").toString())));
+            // Events classified to this concept (from memory store)
+            synchronized (memoryEventStore) {
+                for (Map<String, Object> evt : memoryEventStore) {
+                    String cc = (String) evt.get("classifiedConcept");
+                    if (cc != null && (cc.equals(conceptIri) || cc.endsWith(conceptIri) || conceptIri.endsWith(cc))) {
+                        String eId = (String) evt.get("eventId");
+                        if (eId != null && nodeIds.add(eId)) {
+                            nodes.add(Map.of("id", eId, "type", "ActionEvent", "label",
+                                    evt.getOrDefault("description", "").toString(),
+                                    "properties", Map.of("studentId", evt.getOrDefault("studentId", "").toString(),
+                                            "severity", evt.getOrDefault("severity", "").toString())));
+                        }
+                        addEdge(edges, eId, conceptIri, "CLASSIFIED_AS");
                     }
-                    addEdge(edges, eId, conceptIri, "CLASSIFIED_AS");
                 }
             }
-        }
 
-        result.put("nodes", nodes);
-        result.put("edges", edges);
-        return ResponseEntity.ok(result);
+            result.put("nodes", nodes);
+            result.put("edges", edges);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Error building graph data for conceptIri={}: {}", conceptIri, e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     // ================================================================
@@ -969,5 +993,26 @@ public class EventController {
         EvaluationNode evalNode = new EvaluationNode(
                 "eval:" + UUID.randomUUID(), effectiveness, cost, satisfaction, execNode);
         evaluationNeoRepo.save(evalNode);
+    }
+
+    // ================================================================
+    // Global exception handling within this controller
+    // ================================================================
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, String>> handleMissingParams(MissingServletRequestParameterException ex) {
+        log.warn("Bad request: missing required parameter '{}' for method '{}'",
+                ex.getParameterName(), ex.getMethodParameter());
+        return ResponseEntity.badRequest().body(Map.of(
+                "error", "Missing required parameter: " + ex.getParameterName()
+        ));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleGenericException(Exception ex) {
+        log.error("Unhandled exception in controller: {}", ex.getMessage(), ex);
+        return ResponseEntity.internalServerError().body(Map.of(
+                "error", "Internal server error"
+        ));
     }
 }
