@@ -1,25 +1,21 @@
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { Routes, Route, NavLink } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
-import Students from './pages/Students';
-import Ontology from './pages/Ontology';
 import Events from './pages/Events';
+import Interventions from './pages/Interventions';
+import Graph from './pages/Graph';
 import Evolution from './pages/Evolution';
-import Metrics from './pages/Metrics';
-import HowItWorks from './pages/HowItWorks';
+import Docs from './pages/Docs';
 
 const NAV_ITEMS = [
-  { path: '/', icon: '📊', label: '仪表盘' },
-  { path: '/how-it-works', icon: '📖', label: '原理说明' },
-  { path: '/students', icon: '👨‍🎓', label: '学生数据' },
-  { path: '/ontology', icon: '🌳', label: '本体视图' },
-  { path: '/events', icon: '⚡', label: '事件处理' },
-  { path: '/evolution', icon: '🧬', label: '进化引擎' },
-  { path: '/metrics', icon: '📈', label: '评估指标' },
+  { path: '/', icon: '📊', label: '工作台' },
+  { path: '/events', icon: '🔍', label: '事件追溯' },
+  { path: '/interventions', icon: '💡', label: '方案库' },
+  { path: '/graph', icon: '🔗', label: '关系图谱' },
+  { path: '/evolution', icon: '🧬', label: '进化监控' },
+  { path: '/docs', icon: '📖', label: '文档中心' },
 ];
 
 export default function App() {
-  const location = useLocation();
-
   return (
     <div className="app-layout">
       <aside className="sidebar">
@@ -28,7 +24,7 @@ export default function App() {
             <span>🧬</span>
             <span>OntoEvolve</span>
           </h1>
-          <div className="subtitle">教育决策进化系统</div>
+          <div className="subtitle">学生行为干预管理系统</div>
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(item => (
@@ -46,18 +42,17 @@ export default function App() {
           ))}
         </nav>
         <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)' }}>
-          OntoEvolve v0.1.0
+          OntoEvolve v0.2.0
         </div>
       </aside>
       <main className="main-content">
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/how-it-works" element={<HowItWorks />} />
-          <Route path="/students" element={<Students />} />
-          <Route path="/ontology" element={<Ontology />} />
           <Route path="/events" element={<Events />} />
+          <Route path="/interventions" element={<Interventions />} />
+          <Route path="/graph" element={<Graph />} />
           <Route path="/evolution" element={<Evolution />} />
-          <Route path="/metrics" element={<Metrics />} />
+          <Route path="/docs" element={<Docs />} />
         </Routes>
       </main>
     </div>

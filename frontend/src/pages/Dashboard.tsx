@@ -1,133 +1,183 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api';
-import type { SystemMetrics } from '../types';
+import type { DashboardData } from '../types';
 
 export default function Dashboard() {
-  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    api.getMetrics()
-      .then(setMetrics)
-      .catch(() => setError('无法连接后端服务'))
-      .finally(() => setLoading(false));
-  }, []);
+  useEffect(() => { loadDashboard(); }, []);
 
-  const fmt = (v: number, d = 2) => (v || 0).toFixed(d);
+  const loadDashboard = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const d = await api.getDashboard();
+      setData(d);
+    } catch {
+      setError('无法加载仪表盘数据，请确认后端服务已启动');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const stats = metrics ? [
-    { label: '学生总数', value: metrics.totalStudents, desc: 'UCI Student Performance 数据集', icon: '👨‍🎓', highlight: false },
-    { label: '事件总数', value: metrics.totalEvents, desc: metrics.totalEvents > 0 ? '已处理的行为事件' : '暂未处理事件', icon: '⚡', highlight: false },
-    { label: '干预方案', value: metrics.totalInterventions, desc: metrics.totalInterventions > 0 ? '进化产生的方案数' : '暂无干预方案', icon: '💊', highlight: false },
-    { label: '反馈评价', value: metrics.totalFeedbacks, desc: metrics.totalFeedbacks > 0 ? '驱动的进化选择压力' : '暂无反馈', icon: '📝', highlight: false },
-    { label: 'LLM 调用', value: metrics.llmCalls, desc: 'DeepSeek API 调用次数', icon: '🤖', highlight: false },
-    { label: '生态位数量', value: metrics.totalPopulations, desc: metrics.totalPopulations > 0 ? '活跃的概念种群' : '暂无生态位', icon: '🌿', highlight: false },
-    { label: '种群多样性', value: (metrics.nicheDiversity * 100).toFixed(1) + '%', desc: metrics.nicheDiversity > 0 ? 'Shannon 多样性指数' : '暂无数据', icon: '🔄', highlight: metrics.nicheDiversity > 0 },
-    { label: '超体积均值', value: metrics.averageHypervolume > 0 ? fmt(metrics.averageHypervolume) : '—', desc: metrics.averageHypervolume > 0 ? 'Pareto 前沿质量' : '暂无数据', icon: '📐', highlight: metrics.averageHypervolume > 0 },
-  ] : [];
+  if (loading) return <div className="loading">加载中...</div>;
+  if (error) return (
+    <div className="card" style={{ textAlign: 'center', padding: 60 }}>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>{error}</p>
+      <button className="btn" onClick={loadDashboard}>重试</button>
+    </div>
+  );
+  if (!data) return null;
 
-  const hasData = metrics && (metrics.totalEvents > 0 || metrics.totalFeedbacks > 0 || metrics.totalPopulations > 0);
+  const { stats, recentActivity, topInterventions, nicheHealth } = data;
 
   return (
     <div>
       <div className="page-header">
-        <h2>系统仪表盘</h2>
-        <p>OntoEvolve 教育决策进化系统 — 本体驱动的自进化决策框架</p>
+        <h2>工作台</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>系统运行概览与实时动态</p>
       </div>
 
-      {loading ? (
-        <div className="loading">加载中...</div>
-      ) : error ? (
-        <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🔌</div>
-          <p>{error}</p>
-          <p style={{ fontSize: 13, marginTop: 8 }}>请确保后端服务已启动</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-4 mb-6">
-            {stats.map((s, i) => (
-              <div key={i} className={`stat-card ${s.highlight ? '' : ''}`}
-                style={!hasData && i < 2 ? { opacity: 0.6 } : undefined}>
-                <div className="stat-label">{s.icon} {s.label}</div>
-                <div className="stat-value" style={{ fontSize: s.value?.toString()?.length > 6 ? 22 : 28 }}>
-                  {s.value ?? '—'}
-                </div>
-                <div className="stat-desc">{s.desc}</div>
-              </div>
-            ))}
+      <div className="grid grid-4">
+        <StatCard label="📥 今日事件" value={stats.todayEvents} desc="今日提交的行为事件" />
+        <StatCard label="⭐ 待评价" value={stats.pendingEvaluations} desc="尚未提交效果评价" />
+        <StatCard label="💡 活跃方案" value={stats.activeInterventions} desc="所有生态位中的活跃方案" />
+        <StatCard label="🧬 进化代次" value={`Gen ${stats.totalGenerations}`} desc="最高进化代际" />
+        <StatCard label="📝 累积反馈" value={stats.totalFeedbacks} desc="收到的效果评价总数" />
+        <StatCard label="🌳 生态位" value={stats.totalPopulations} desc="本体概念生态位数量" />
+        <StatCard label="👨‍🎓 学生" value={stats.totalStudents} desc="已导入学生数据" />
+        <StatCard label="🤖 LLM调用" value={stats.llmCalls} desc="大模型调用总次数" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">最近活动</div>
           </div>
-
-          {!hasData && (
-            <div className="card mb-6" style={{ background: 'rgba(79,70,229,0.06)', borderColor: 'rgba(79,70,229,0.2)', textAlign: 'center', padding: 24 }}>
-              <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-                💡 系统暂无运行数据，请前往 <Link to="/events">事件处理</Link> 页面提交行为事件开始使用
-              </p>
-            </div>
-          )}
-
-          <div className="grid grid-2">
-            <div className="card">
-              <div className="card-header">
-                <div className="card-title">系统架构</div>
-              </div>
-              <div className="pipeline" style={{ justifyContent: 'center' }}>
-                {[
-                  { icon: '📥', label: '输入事件' },
-                  { icon: '🏷️', label: 'LLM 分类' },
-                  { icon: '🎯', label: '匹配方案' },
-                  { icon: '🧬', label: '进化优化' },
-                  { icon: '📊', label: '反馈评价' },
-                ].map((step, i) => (
-                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span className="pipeline-step active" style={{ padding: '8px 12px', minWidth: 80 }}>
-                      <div className="step-icon" style={{ fontSize: 20 }}>{step.icon}</div>
-                      <div className="step-label">{step.label}</div>
-                    </span>
-                    {i < 4 && <span className="pipeline-arrow" style={{ fontSize: 16 }}>→</span>}
-                  </span>
-                ))}
-              </div>
-              <div className="explain-box mt-4">
-                <p>
-                  <strong>OntoEvolve</strong> 是一个本体驱动的自进化决策框架。
-                  行为事件经过 <strong>LLM 语义分类</strong> 映射到本体概念生态位，
-                  从种群中 <strong>匹配</strong> 最优干预方案，
-                  通过 <strong>进化算法</strong>（变异+选择+迁移）持续优化方案质量，
-                  最后通过 <strong>多维反馈</strong> 驱动选择压力。
-                </p>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-header">
-                <div className="card-title">快速入口</div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
-                  { to: '/how-it-works', icon: '📖', title: '原理说明', desc: '了解系统的完整工作流程' },
-                  { to: '/events', icon: '⚡', title: '处理事件', desc: '提交行为事件并查看处理结果' },
-                  { to: '/evolution', icon: '🧬', title: '进化引擎', desc: '查看种群进化状态和族谱' },
-                  { to: '/metrics', icon: '📈', title: '评估指标', desc: '查看系统运行指标和图表' },
-                ].map(item => (
-                  <Link key={item.to} to={item.to} style={{
-                    padding: '12px 16px', background: 'var(--bg-card-hover)',
-                    borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', gap: 12
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {recentActivity.length === 0 ? (
+              <EmptyHint text="暂无活动记录" hint="提交一条行为事件后开始" />
+            ) : (
+              recentActivity.map((item) => (
+                <div key={item.eventId} style={{
+                  padding: '10px 20px', borderBottom: '1px solid var(--border)',
+                  fontSize: 13, display: 'flex', alignItems: 'center', gap: 10
+                }}>
+                  <span style={{
+                    background: item.severity === 'severe' ? 'var(--accent-alt)' :
+                      item.severity === 'moderate' ? 'var(--decide)' : 'var(--act)',
+                    color: '#fff', borderRadius: 4, padding: '1px 6px', fontSize: 10, flexShrink: 0
                   }}>
-                    <span style={{ fontSize: 24 }}>{item.icon}</span>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{item.title}</div>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{item.desc}</div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
+                    {item.severity === 'severe' ? '严重' : item.severity === 'moderate' ? '中等' : '轻微'}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{item.studentId} · </span>
+                    {item.description?.length > 20 ? item.description.slice(0, 20) + '...' : item.description}
+                  </span>
+                  {item.matchedIntervention ? (
+                    <span style={{ color: 'var(--primary)', fontSize: 11, flexShrink: 0 }}>
+                      → {item.matchedIntervention}
+                    </span>
+                  ) : null}
+                  {item.hasEvaluation ? <span style={{ fontSize: 10 }}>✅</span> : <span style={{ fontSize: 10 }}>⏳</span>}
+                </div>
+              ))
+            )}
           </div>
-        </>
-      )}
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">方案效果排行</div>
+          </div>
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {topInterventions.length === 0 ? (
+              <EmptyHint text="暂无方案评分" hint="提交评价后产生排行" />
+            ) : (
+              topInterventions.map((item, i) => (
+                <div key={item.iri} style={{
+                  padding: '10px 20px', borderBottom: '1px solid var(--border)', fontSize: 13
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>
+                      <span style={{ color: 'var(--text-muted)', marginRight: 8 }}>#{i + 1}</span>
+                      <strong>{item.name}</strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 6 }}>
+                        {item.conceptLabel} · {item.trials}次
+                      </span>
+                    </span>
+                    <span style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                      {item.effectiveness.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 24 }}>
+        <div className="card-header">
+          <div className="card-title">生态位健康概览</div>
+        </div>
+        <div style={{ padding: '0 20px 16px' }}>
+          {nicheHealth.length === 0 ? (
+            <EmptyHint text="暂无生态位数据" hint="提交事件后自动创建生态位" />
+          ) : (
+            nicheHealth.map((nh) => (
+              <div key={nh.conceptIri} style={{
+                display: 'flex', alignItems: 'center', gap: 16, padding: '10px 0',
+                borderBottom: '1px solid var(--border)'
+              }}>
+                <span style={{ width: 100, fontWeight: 600, fontSize: 13 }}>{nh.conceptLabel}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', width: 60 }}>Gen {nh.generation}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', width: 60 }}>{nh.populationSize} 方案</span>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', width: 70 }}>
+                  ELITE {nh.eliteCount}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <Bar label="效果" value={nh.avgEffectiveness} color="var(--primary)" />
+                  <Bar label="成本" value={nh.avgCost} color="var(--decide)" />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, desc }: { label: string; value: string | number; desc: string }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-desc">{desc}</div>
+    </div>
+  );
+}
+
+function Bar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+      <span style={{ color: 'var(--text-muted)', width: 24 }}>{label}</span>
+      <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3 }}>
+        <div style={{ width: `${(value * 100).toFixed(0)}%`, height: '100%', background: color, borderRadius: 3 }} />
+      </div>
+      <span style={{ width: 36, textAlign: 'right' }}>{(value * 100).toFixed(0)}%</span>
+    </div>
+  );
+}
+
+function EmptyHint({ text, hint }: { text: string; hint: string }) {
+  return (
+    <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+      <p style={{ fontSize: 14 }}>{text}</p>
+      <p style={{ fontSize: 12, marginTop: 4 }}>{hint}</p>
     </div>
   );
 }

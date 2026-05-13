@@ -611,7 +611,7 @@ Phase 4: 元进化与生产打磨 (9 — 12 个月)
 | **关系型数据库** | H2 (开发) / PostgreSQL (生产) | 业务数据（学生信息等）|
 | **本体推理** | Apache Jena 5.0 | OWL 本体加载、InfModel 推理、disjointness/一致性验证 |
 | **LLM 集成** | Spring AI 1.0.3 + Spring Retry | 事件分类与变异生成（@Retryable、token 统计、模板渲染） |
-| **前端** | React 18 + TypeScript + Vite | 管理界面：事件处理、种群监控、进化轨迹 |
+| **前端** | React 18 + TypeScript + Vite + Recharts | 管理界面：工作台、事件追溯、方案库、关系图谱、进化监控、文档中心 |
 | **可观测性** | Micrometer 1.12 + Prometheus | 指标收集与监控 |
 | **构建工具** | Maven (多模块) | 模块化构建管理 |
 

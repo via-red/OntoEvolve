@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { api } from '../api';
 import Tree from 'react-d3-tree';
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import type { RawNodeDatum, CustomNodeElementProps, Point } from 'react-d3-tree';
-import type { PopulationView, AssignmentView, EvolTrace } from '../types';
+import type { PopulationView, AssignmentView, EvolTrace, PopulationDetail } from '../types';
 
 const OP_COLORS: Record<string, string> = {
   LLM_GENERATE: '#818cf8',
@@ -149,9 +150,10 @@ export default function Evolution() {
   const [evolving, setEvolving] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'populations' | 'genealogy'>('populations');
 
-  // Population drill-down: conceptIri → members
+  // Population drill-down: conceptIri → members + pareto
   const [expandedPop, setExpandedPop] = useState<string | null>(null);
   const [popMembers, setPopMembers] = useState<Record<string, AssignmentView[]>>({});
+  const [popDetails, setPopDetails] = useState<Record<string, PopulationDetail>>({});
   const [membersLoading, setMembersLoading] = useState(false);
 
   // Genealogy selection
@@ -188,10 +190,20 @@ export default function Evolution() {
       try {
         const detail = await api.getPopulation(conceptIri);
         setPopMembers(prev => ({ ...prev, [conceptIri]: detail.members || [] }));
+        setPopDetails(prev => ({ ...prev, [conceptIri]: detail }));
       } catch (e) {}
       setMembersLoading(false);
     }
   };
+
+  // Variator stats from traces
+  const variatorStats = useMemo(() => {
+    const counts: Record<string, number> = {};
+    traces.forEach(t => {
+      counts[t.type] = (counts[t.type] || 0) + 1;
+    });
+    return Object.entries(counts).map(([type, count]) => ({ type, count }));
+  }, [traces]);
 
   const viewGenealogy = (decisionIri: string) => {
     setSelectedDecisionIri(decisionIri);
@@ -365,11 +377,79 @@ export default function Evolution() {
                           </table>
                         </div>
                       )}
+
+                      {/* Pareto Scatter Chart */}
+                      {popDetails[pop.conceptIri]?.paretoPoints && popDetails[pop.conceptIri].paretoPoints!.length > 0 && (
+                        <div style={{ marginTop: 16, borderTop: '1px solid var(--border-light)', paddingTop: 16 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-secondary)' }}>
+                            Pareto 前沿 (效果 vs 成本)
+                          </div>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
+                              <XAxis dataKey="effectiveness" name="效果" unit="" domain={[0, 1]} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
+                              <YAxis dataKey="cost" name="成本" unit="" domain={[0, 1]} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
+                              <Tooltip cursor={{ strokeDasharray: '3 3' }}
+                                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }} />
+                              <Scatter data={popDetails[pop.conceptIri].paretoPoints} fill="var(--primary)" />
+                            </ScatterChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               );
             })}
+          </div>
+
+          {/* Variator Stats + Pareto Summary */}
+          <div className="grid grid-2 mt-6">
+            {/* Variator Stats Bar Chart */}
+            {variatorStats.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">变异算子统计</div>
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={variatorStats} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
+                    <XAxis dataKey="type" tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
+                    <YAxis tick={{ fontSize: 11 }} stroke="var(--text-muted)" allowDecimals={false} />
+                    <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }} />
+                    <Bar dataKey="count" name="次数">
+                      {variatorStats.map((entry, index) => (
+                        <Cell key={index} fill={OP_COLORS[entry.type] || '#999'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Population Scores Overview */}
+            {populations.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">种群平均效果概览</div>
+                </div>
+                <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {populations.map(pop => (
+                    <div key={pop.conceptIri} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                        <span>{pop.conceptLabel}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>Gen {pop.generation} · {pop.size}方案</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-secondary)' }}>
+                        <span>效果 {(pop.avgEffectiveness || 0).toFixed(2)}</span>
+                        <span>成本 {(pop.avgCost || 0).toFixed(2)}</span>
+                        <span>精英 {pop.eliteCount || 0}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Traces Table */}
