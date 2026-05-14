@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: onto-evolve-saas
+
+server:
+  port: 8090
+
+onto:
+  saas:
+    domains-path: data/domains

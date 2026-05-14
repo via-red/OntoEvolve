@@ -75,6 +75,32 @@ services:
       timeout: 5s
       retries: 5
 
+  # === SaaS 平台模式 (add --profile saas) ===
+  saas-backend:
+    profiles: ["saas"]
+    build:
+      context: .
+      dockerfile: onto-evolve-saas/Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+    volumes:
+      - ./data/domains:/app/data/domains
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  saas-frontend:
+    profiles: ["saas"]
+    build: frontend-saas
+    ports:
+      - "81:80"
+    depends_on:
+      - saas-backend
+
 volumes:
   neodata:
   pgdata:

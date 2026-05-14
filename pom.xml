@@ -19,6 +19,7 @@
         <module>onto-evolve-starter</module>
         <module>onto-domain-education</module>
         <module>onto-evolve-graph-store</module>
+        <module>onto-evolve-saas</module>
     </modules>
 
     <properties>
@@ -59,6 +60,11 @@
             <dependency>
                 <groupId>com.ontoevolve</groupId>
                 <artifactId>onto-evolve-graph-store</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ontoevolve</groupId>
+                <artifactId>onto-evolve-saas</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
