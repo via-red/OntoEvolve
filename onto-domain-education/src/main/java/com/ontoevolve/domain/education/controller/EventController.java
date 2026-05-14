@@ -248,7 +248,7 @@ public class EventController {
     // ================================================================
 
     @PostMapping("/evaluation")
-    public ResponseEntity<Map<String, String>> submitEvaluation(@RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> submitEvaluation(@RequestBody Map<String, String> body) {
         String interventionIri = body.getOrDefault("interventionIri", "");
         String eventId = body.getOrDefault("eventId", "");
         String studentId = body.getOrDefault("studentId", "unknown");
@@ -256,30 +256,49 @@ public class EventController {
         double cost = Double.parseDouble(body.getOrDefault("cost", "0.3"));
         double satisfaction = Double.parseDouble(body.getOrDefault("satisfaction", "0.8"));
 
-        interventionService.submitEvaluationByIntervention(
-                interventionIri, studentId, effectiveness, cost, satisfaction
-        );
+        boolean alreadyEvaluated = false;
 
-        // Mark the event as evaluated
+        // Check duplicate: each event can only be evaluated once
         if (!eventId.isEmpty()) {
             synchronized (memoryEventStore) {
                 for (Map<String, Object> evt : memoryEventStore) {
                     if (eventId.equals(evt.get("eventId"))) {
-                        evt.put("hasEvaluation", true);
-                        evt.put("evalEffectiveness", effectiveness);
-                        evt.put("evalCost", cost);
-                        evt.put("evalSatisfaction", satisfaction);
+                        alreadyEvaluated = Boolean.TRUE.equals(evt.get("hasEvaluation"));
                         break;
                     }
                 }
             }
         }
 
-        if (evaluationNeoRepo != null && executionNeoRepo != null && assignmentNeoRepo != null) {
-            persistEvaluationChain(interventionIri, studentId, effectiveness, cost, satisfaction);
+        if (!alreadyEvaluated) {
+            interventionService.submitEvaluationByIntervention(
+                    interventionIri, studentId, effectiveness, cost, satisfaction
+            );
+
+            // Mark the event as evaluated
+            if (!eventId.isEmpty()) {
+                synchronized (memoryEventStore) {
+                    for (Map<String, Object> evt : memoryEventStore) {
+                        if (eventId.equals(evt.get("eventId"))) {
+                            evt.put("hasEvaluation", true);
+                            evt.put("evalEffectiveness", effectiveness);
+                            evt.put("evalCost", cost);
+                            evt.put("evalSatisfaction", satisfaction);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (evaluationNeoRepo != null && executionNeoRepo != null && assignmentNeoRepo != null) {
+                persistEvaluationChain(interventionIri, studentId, effectiveness, cost, satisfaction);
+            }
         }
 
-        return ResponseEntity.ok(Map.of("message", "评价已提交"));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("message", alreadyEvaluated ? "该事件已评价过" : "评价已提交");
+        result.put("hasEvaluation", true);
+        return ResponseEntity.ok(result);
     }
 
     // ================================================================

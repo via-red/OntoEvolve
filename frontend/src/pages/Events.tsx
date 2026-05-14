@@ -105,12 +105,25 @@ export default function Events() {
     try {
       await api.submitEvaluation({
         interventionIri: eventDetail.interventionIri,
+        eventId: eventDetail.eventId,
         studentId: eventDetail.studentId,
         ...evalForm,
       });
+      // 从后端重新获取详情，获取准确的 trial 计数、评分等状态
       const detail = await api.getEventDetail(eventDetail.eventId);
       setEventDetail(detail);
-      await loadEvents();
+      // 用后端数据更新列表中的评价状态
+      setData(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          content: prev.content.map(e =>
+            e.eventId === detail.eventId
+              ? { ...e, hasEvaluation: true, evalEffectiveness: detail.evalEffectiveness ?? evalForm.effectiveness, evalCost: detail.evalCost ?? evalForm.cost, evalSatisfaction: detail.evalSatisfaction ?? evalForm.satisfaction }
+              : e
+          )
+        };
+      });
     } catch (e: any) {
       setError('评价提交失败: ' + (e.message || ''));
     }
