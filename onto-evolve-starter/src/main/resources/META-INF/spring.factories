@@ -1,2 +1,3 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-com.ontoevolve.starter.OntoEvolveAutoConfiguration
+com.ontoevolve.starter.OntoEvolveAutoConfiguration,\
+com.ontoevolve.starter.OpenAiChatConfig

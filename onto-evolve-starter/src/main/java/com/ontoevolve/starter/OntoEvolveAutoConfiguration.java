@@ -56,8 +56,8 @@ public class OntoEvolveAutoConfiguration {
     // ==================== Spring AI ChatClient ====================
 
     /**
-     * ChatClient.Builder 由领域模块的 @Bean 提供（如 OpenAiChatConfig），
-     * 以便 Starter 保持 LLM 供应商无关。
+     * ChatClient.Builder 由 OpenAiChatConfig (默认) 或领域模块的 @Bean 提供。
+     * OpenAiChatConfig 带有 @ConditionalOnMissingBean，领域模块可覆盖。
      */
     @Bean
     @ConditionalOnMissingBean
